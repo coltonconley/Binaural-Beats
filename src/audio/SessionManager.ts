@@ -1,0 +1,332 @@
+import type { SessionPreset, SessionPhase, FrequencyPoint } from '../types'
+import { BinauralEngine } from './BinauralEngine'
+import { NoiseGenerator } from './NoiseGenerator'
+import { IsochronicEngine } from './IsochronicEngine'
+
+export type SessionCallback = (state: {
+  phase: SessionPhase
+  elapsed: number
+  beatFreq: number
+}) => void
+
+export class SessionManager {
+  private ctx: AudioContext | null = null
+  private engine = new BinauralEngine()
+  private noise = new NoiseGenerator()
+  private isochronic = new IsochronicEngine()
+  private preset: SessionPreset | null = null
+  private startTime = 0
+  private pausedAt = 0
+  private pauseOffset = 0
+  private animFrameId = 0
+  private fallbackInterval: ReturnType<typeof setInterval> | null = null
+  private _phase: SessionPhase = 'idle'
+  private _elapsed = 0
+  private callback: SessionCallback | null = null
+  private volume = 0.7
+  private _isochronicEnabled = false
+  private _starting = false
+
+  get phase(): SessionPhase {
+    return this._phase
+  }
+
+  get elapsed(): number {
+    return this._elapsed
+  }
+
+  get isPlaying(): boolean {
+    return this._phase !== 'idle' && this._phase !== 'complete' && this.pausedAt === 0
+  }
+
+  get isPaused(): boolean {
+    return this.pausedAt > 0
+  }
+
+  get binauralEngine(): BinauralEngine {
+    return this.engine
+  }
+
+  get currentBeatFreq(): number {
+    return this.engine.currentBeatFreq
+  }
+
+  get isochronicEnabled(): boolean {
+    return this._isochronicEnabled
+  }
+
+  async start(
+    preset: SessionPreset,
+    volume: number,
+    isochronicEnabled: boolean,
+    onUpdate: SessionCallback,
+  ): Promise<void> {
+    if (this._starting) return
+    this._starting = true
+
+    try {
+      this.stop()
+      this.preset = preset
+      this.volume = volume
+      this.callback = onUpdate
+      this.pauseOffset = 0
+      this.pausedAt = 0
+      this._isochronicEnabled = isochronicEnabled && preset.isochronicAvailable
+
+      const initialBeatFreq = preset.frequencyEnvelope[0].beatFreq
+
+      // Create shared AudioContext (must be in user gesture call stack)
+      this.ctx = new AudioContext()
+      await this.ctx.resume()
+
+      // Start binaural engine with shared context
+      this.engine.startWithContext(
+        this.ctx,
+        this.ctx.destination,
+        preset.carriers,
+        initialBeatFreq,
+        0, // start silent
+      )
+
+      // Fade in over 2 seconds
+      this.engine.fadeVolume(volume, 2)
+
+      // Start noise
+      if (preset.noiseType !== 'none') {
+        this.noise.start(this.ctx, this.ctx.destination, preset.noiseType, 0)
+        this.noise.fadeVolume(preset.noiseVolume * volume, 2)
+      }
+
+      // Start isochronic if enabled
+      if (this._isochronicEnabled) {
+        this.isochronic.start(
+          this.ctx,
+          this.ctx.destination,
+          preset.carriers[0].carrierFreq,
+          initialBeatFreq,
+          volume,
+        )
+      }
+
+      this._phase = 'induction'
+      this.startTime = performance.now()
+
+      // Set up visibility change handler
+      document.addEventListener('visibilitychange', this.handleVisibilityChange)
+
+      this.startTickLoop()
+    } finally {
+      this._starting = false
+    }
+  }
+
+  pause(): void {
+    if (this.pausedAt > 0 || this._phase === 'idle' || this._phase === 'complete') return
+    this.pausedAt = performance.now()
+    this.stopTickLoop()
+    this.engine.fadeVolume(0, 0.3)
+    this.noise.fadeVolume(0, 0.3)
+    if (this._isochronicEnabled) this.isochronic.setVolume(0)
+  }
+
+  resume(): void {
+    if (this.pausedAt === 0) return
+    this.pauseOffset += performance.now() - this.pausedAt
+    this.pausedAt = 0
+
+    // Check if session should have completed while paused
+    const elapsed = (performance.now() - this.startTime - this.pauseOffset) / 1000
+    if (this.preset && elapsed >= this.preset.duration) {
+      this.completeSession()
+      return
+    }
+
+    this.engine.fadeVolume(this.volume, 0.3)
+    if (this.preset) {
+      this.noise.fadeVolume(this.preset.noiseVolume * this.volume, 0.3)
+    }
+    if (this._isochronicEnabled) this.isochronic.setVolume(this.volume)
+    this.startTickLoop()
+  }
+
+  stop(): void {
+    this.stopTickLoop()
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange)
+    this.engine.stopShared()
+    this.noise.stop()
+    this.isochronic.stop()
+    if (this.ctx && this.ctx.state !== 'closed') {
+      this.ctx.close()
+    }
+    this.ctx = null
+    this._phase = 'idle'
+    this._elapsed = 0
+    this.pauseOffset = 0
+    this.pausedAt = 0
+    this.preset = null
+    this.callback = null
+    this._isochronicEnabled = false
+  }
+
+  setVolume(v: number): void {
+    this.volume = v
+    if (this.pausedAt > 0) return
+    this.engine.setVolume(v)
+    if (this.preset) {
+      this.noise.setVolume(this.preset.noiseVolume * v)
+    }
+    if (this._isochronicEnabled) this.isochronic.setVolume(v)
+  }
+
+  toggleIsochronic(): void {
+    if (!this.preset || !this.preset.isochronicAvailable || !this.ctx) return
+
+    this._isochronicEnabled = !this._isochronicEnabled
+    if (this._isochronicEnabled) {
+      this.isochronic.start(
+        this.ctx,
+        this.ctx.destination,
+        this.preset.carriers[0].carrierFreq,
+        this.engine.currentBeatFreq,
+        this.pausedAt > 0 ? 0 : this.volume,
+      )
+    } else {
+      this.isochronic.stop()
+    }
+  }
+
+  // ── Tick loop ─────────────────────────────────────────────
+
+  private startTickLoop(): void {
+    this.stopTickLoop()
+    if (document.visibilityState === 'hidden') {
+      this.fallbackInterval = setInterval(this.tick, 1000)
+    } else {
+      this.animFrameId = requestAnimationFrame(this.tick)
+    }
+  }
+
+  private stopTickLoop(): void {
+    if (this.animFrameId) {
+      cancelAnimationFrame(this.animFrameId)
+      this.animFrameId = 0
+    }
+    if (this.fallbackInterval) {
+      clearInterval(this.fallbackInterval)
+      this.fallbackInterval = null
+    }
+  }
+
+  private handleVisibilityChange = (): void => {
+    if (this._phase === 'idle' || this._phase === 'complete' || this.pausedAt > 0) return
+
+    this.stopTickLoop()
+    if (document.visibilityState === 'hidden') {
+      this.fallbackInterval = setInterval(this.tick, 1000)
+    } else {
+      // Returning to foreground — do an immediate tick then resume rAF
+      this.tick()
+      this.animFrameId = requestAnimationFrame(this.tick)
+    }
+  }
+
+  private tick = (): void => {
+    if (!this.preset || this.pausedAt > 0) return
+
+    const now = performance.now()
+    this._elapsed = (now - this.startTime - this.pauseOffset) / 1000
+
+    if (this._elapsed >= this.preset.duration) {
+      this.completeSession()
+      return
+    }
+
+    this.updatePhase()
+
+    // Interpolate target beat frequency from envelope
+    let targetFreq = this.interpolateFrequency(this._elapsed)
+
+    // Apply habituation oscillation during main phase (±0.3 Hz, 45s period)
+    if (this._phase === 'main') {
+      const oscillation = Math.sin((this._elapsed * 2 * Math.PI) / 45) * 0.3
+      targetFreq += oscillation
+    }
+
+    // Smooth micro-ramp toward target
+    if (Math.abs(targetFreq - this.engine.currentBeatFreq) > 0.01) {
+      this.engine.rampBeatFrequency(targetFreq, 0.5)
+    }
+
+    // Update isochronic beat frequency to match
+    if (this._isochronicEnabled) {
+      this.isochronic.setBeatFrequency(targetFreq)
+    }
+
+    this.callback?.({
+      phase: this._phase,
+      elapsed: this._elapsed,
+      beatFreq: targetFreq,
+    })
+
+    // Re-schedule if using rAF
+    if (document.visibilityState !== 'hidden' && !this.fallbackInterval) {
+      this.animFrameId = requestAnimationFrame(this.tick)
+    }
+  }
+
+  private completeSession(): void {
+    this._phase = 'complete'
+    this.stopTickLoop()
+
+    if (this.preset && !this.preset.hasReturnPhase) {
+      this.engine.fadeVolume(0, 5)
+      this.noise.fadeVolume(0, 5)
+    }
+
+    this.callback?.({
+      phase: 'complete',
+      elapsed: this.preset?.duration ?? this._elapsed,
+      beatFreq: this.engine.currentBeatFreq,
+    })
+  }
+
+  private updatePhase(): void {
+    if (!this.preset) return
+    const env = this.preset.frequencyEnvelope
+    const dur = this.preset.duration
+    const t = this._elapsed
+
+    if (t < (env[1]?.time ?? dur * 0.1)) {
+      this._phase = 'induction'
+    } else if (this.preset.hasReturnPhase && t > (env[env.length - 2]?.time ?? dur * 0.85)) {
+      this._phase = 'return'
+    } else {
+      this._phase = 'main'
+    }
+  }
+
+  /** Linear interpolation between frequency envelope keyframes */
+  interpolateFrequency(time: number): number {
+    if (!this.preset) return 10
+
+    const env = this.preset.frequencyEnvelope
+    if (time <= env[0].time) return env[0].beatFreq
+    if (time >= env[env.length - 1].time) return env[env.length - 1].beatFreq
+
+    let prev: FrequencyPoint = env[0]
+    let next: FrequencyPoint = env[env.length - 1]
+
+    for (let i = 0; i < env.length - 1; i++) {
+      if (time >= env[i].time && time < env[i + 1].time) {
+        prev = env[i]
+        next = env[i + 1]
+        break
+      }
+    }
+
+    const segDur = next.time - prev.time
+    if (segDur === 0) return prev.beatFreq
+    const progress = (time - prev.time) / segDur
+    return prev.beatFreq + (next.beatFreq - prev.beatFreq) * progress
+  }
+}
