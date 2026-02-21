@@ -233,42 +233,49 @@ export class SessionManager {
   private tick = (): void => {
     if (!this.preset || this.pausedAt > 0) return
 
-    const now = performance.now()
-    this._elapsed = (now - this.startTime - this.pauseOffset) / 1000
+    try {
+      const now = performance.now()
+      this._elapsed = (now - this.startTime - this.pauseOffset) / 1000
 
-    if (this._elapsed >= this.preset.duration) {
-      this.completeSession()
-      return
+      if (this._elapsed >= this.preset.duration) {
+        this.completeSession()
+        return
+      }
+
+      this.updatePhase()
+
+      // Interpolate target beat frequency from envelope
+      let targetFreq = this.interpolateFrequency(this._elapsed)
+
+      // Apply habituation oscillation during main phase (±0.3 Hz, 45s period)
+      if (this._phase === 'main') {
+        const oscillation = Math.sin((this._elapsed * 2 * Math.PI) / 45) * 0.3
+        targetFreq += oscillation
+      }
+
+      // Ensure beat frequency stays positive
+      targetFreq = Math.max(targetFreq, 0.1)
+
+      // Smooth micro-ramp toward target
+      if (Math.abs(targetFreq - this.engine.currentBeatFreq) > 0.01) {
+        this.engine.rampBeatFrequency(targetFreq, 0.5)
+      }
+
+      // Update isochronic beat frequency to match
+      if (this._isochronicEnabled) {
+        this.isochronic.setBeatFrequency(targetFreq)
+      }
+
+      this.callback?.({
+        phase: this._phase,
+        elapsed: this._elapsed,
+        beatFreq: targetFreq,
+      })
+    } catch (err) {
+      console.error('Session tick error:', err)
     }
 
-    this.updatePhase()
-
-    // Interpolate target beat frequency from envelope
-    let targetFreq = this.interpolateFrequency(this._elapsed)
-
-    // Apply habituation oscillation during main phase (±0.3 Hz, 45s period)
-    if (this._phase === 'main') {
-      const oscillation = Math.sin((this._elapsed * 2 * Math.PI) / 45) * 0.3
-      targetFreq += oscillation
-    }
-
-    // Smooth micro-ramp toward target
-    if (Math.abs(targetFreq - this.engine.currentBeatFreq) > 0.01) {
-      this.engine.rampBeatFrequency(targetFreq, 0.5)
-    }
-
-    // Update isochronic beat frequency to match
-    if (this._isochronicEnabled) {
-      this.isochronic.setBeatFrequency(targetFreq)
-    }
-
-    this.callback?.({
-      phase: this._phase,
-      elapsed: this._elapsed,
-      beatFreq: targetFreq,
-    })
-
-    // Re-schedule if using rAF
+    // Re-schedule if using rAF (always, even after error, to keep loop alive)
     if (document.visibilityState !== 'hidden' && !this.fallbackInterval) {
       this.animFrameId = requestAnimationFrame(this.tick)
     }
@@ -296,9 +303,17 @@ export class SessionManager {
     const dur = this.preset.duration
     const t = this._elapsed
 
-    if (t < (env[1]?.time ?? dur * 0.1)) {
+    if (env.length < 2) {
+      this._phase = 'main'
+      return
+    }
+
+    const inductionEnd = env[1].time
+    const returnStart = env.length >= 3 ? env[env.length - 2].time : dur * 0.85
+
+    if (t < inductionEnd) {
       this._phase = 'induction'
-    } else if (this.preset.hasReturnPhase && t > (env[env.length - 2]?.time ?? dur * 0.85)) {
+    } else if (this.preset.hasReturnPhase && t > returnStart) {
       this._phase = 'return'
     } else {
       this._phase = 'main'
@@ -310,6 +325,8 @@ export class SessionManager {
     if (!this.preset) return 10
 
     const env = this.preset.frequencyEnvelope
+    if (env.length === 0) return 10
+    if (env.length === 1) return env[0].beatFreq
     if (time <= env[0].time) return env[0].beatFreq
     if (time >= env[env.length - 1].time) return env[env.length - 1].beatFreq
 

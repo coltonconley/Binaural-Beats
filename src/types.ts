@@ -47,6 +47,7 @@ export interface SessionPreset {
 export interface SessionOptions {
   isochronicEnabled?: boolean
   breathingGuideEnabled?: boolean
+  volume?: number
 }
 
 export interface EngineState {

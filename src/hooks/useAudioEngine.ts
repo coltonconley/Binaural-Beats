@@ -43,11 +43,14 @@ export function useAudioEngine() {
   const startSession = useCallback(
     async (
       preset: SessionPreset,
-      options?: { isochronicEnabled?: boolean; breathingGuideEnabled?: boolean },
+      options?: { isochronicEnabled?: boolean; breathingGuideEnabled?: boolean; volume?: number },
     ) => {
       const manager = getManager()
       const isoEnabled = options?.isochronicEnabled ?? false
       const breathEnabled = options?.breathingGuideEnabled ?? false
+      if (options?.volume !== undefined) {
+        volumeRef.current = options.volume
+      }
 
       await manager.start(preset, volumeRef.current, isoEnabled, ({ phase, elapsed, beatFreq }) => {
         setState((prev) => ({
@@ -67,6 +70,7 @@ export function useAudioEngine() {
         phase: 'induction',
         elapsed: 0,
         duration: preset.duration,
+        volume: volumeRef.current,
         activePreset: preset,
         isochronicEnabled: isoEnabled && preset.isochronicAvailable,
         breathingGuideEnabled: breathEnabled,

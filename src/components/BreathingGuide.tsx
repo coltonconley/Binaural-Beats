@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface Props {
   size: number
@@ -6,21 +6,26 @@ interface Props {
 
 export function BreathingGuide({ size }: Props) {
   const [phase, setPhase] = useState<'in' | 'out'>('in')
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
-    // 10s total cycle: 4.5s inhale, 5.5s exhale
-    let timeout: ReturnType<typeof setTimeout>
+    const clearAll = () => {
+      for (const t of timeoutsRef.current) clearTimeout(t)
+      timeoutsRef.current = []
+    }
 
     const cycle = () => {
       setPhase('in')
-      timeout = setTimeout(() => {
+      const t1 = setTimeout(() => {
         setPhase('out')
-        timeout = setTimeout(cycle, 5500)
+        const t2 = setTimeout(cycle, 5500)
+        timeoutsRef.current.push(t2)
       }, 4500)
+      timeoutsRef.current.push(t1)
     }
 
     cycle()
-    return () => clearTimeout(timeout)
+    return clearAll
   }, [])
 
   return (

@@ -24,6 +24,7 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
     onBegin(preset, {
       isochronicEnabled,
       breathingGuideEnabled,
+      volume: volume / 100,
     })
   }
 
@@ -157,19 +158,23 @@ function Toggle({
   onChange: (v: boolean) => void
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 cursor-pointer">
+    <div className="flex items-center justify-between gap-3">
       <div>
         <p className="text-sm text-slate-300">{label}</p>
         <p className="text-[10px] text-slate-500">{description}</p>
       </div>
-      <div
-        className={`w-10 h-6 rounded-full p-0.5 transition-colors ${checked ? 'bg-purple-500' : 'bg-white/10'}`}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
         onClick={() => onChange(!checked)}
+        className={`w-10 h-6 rounded-full p-0.5 transition-colors cursor-pointer ${checked ? 'bg-purple-500' : 'bg-white/10'}`}
       >
         <div
           className={`w-5 h-5 rounded-full bg-white transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`}
         />
-      </div>
-    </label>
+      </button>
+    </div>
   )
 }

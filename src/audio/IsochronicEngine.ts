@@ -93,8 +93,16 @@ export class IsochronicEngine {
 
     const now = this.ctx.currentTime
     const scheduleAhead = 1.1 // seconds
-    const startFrom = Math.max(this.lastScheduledTime, now)
     const endTime = now + scheduleAhead
+
+    // If lastScheduledTime is too far in the past (e.g., after tab backgrounding),
+    // reset to now to avoid scheduling a huge backlog of pulses
+    const startFrom = this.lastScheduledTime < now - 0.1
+      ? now
+      : Math.max(this.lastScheduledTime, now)
+
+    // Cancel any previously scheduled values beyond startFrom to prevent overlap
+    this.pulseGain.gain.cancelScheduledValues(startFrom)
 
     const period = 1 / this._beatFreq
     const halfPeriod = period / 2
@@ -102,15 +110,13 @@ export class IsochronicEngine {
 
     let t = startFrom
     while (t < endTime) {
-      const onStart = t
       const onEnd = t + halfPeriod
       const offEnd = t + period
 
       // Ramp up (attack)
-      this.pulseGain.gain.setValueAtTime(0, onStart)
-      this.pulseGain.gain.linearRampToValueAtTime(1, onStart + rampTime)
+      this.pulseGain.gain.setValueAtTime(0, t)
+      this.pulseGain.gain.linearRampToValueAtTime(1, t + rampTime)
 
-      // Hold on
       // Ramp down (release)
       this.pulseGain.gain.setValueAtTime(1, onEnd - rampTime)
       this.pulseGain.gain.linearRampToValueAtTime(0, onEnd)

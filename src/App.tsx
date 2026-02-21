@@ -57,6 +57,7 @@ function App() {
         await audio.startSession(preset, {
           isochronicEnabled: options.isochronicEnabled,
           breathingGuideEnabled: options.breathingGuideEnabled,
+          volume: options.volume,
         })
         await wakeLock.request()
         setView('session')

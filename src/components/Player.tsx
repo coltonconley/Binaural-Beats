@@ -36,8 +36,6 @@ export function Player({
   onResume,
   onStop,
   onVolumeChange,
-  onToggleIsochronic: _onToggleIsochronic,
-  onToggleBreathingGuide: _onToggleBreathingGuide,
   onComplete,
   getAnalyser,
 }: Props) {
@@ -47,18 +45,24 @@ export function Player({
   const [showStopConfirm, setShowStopConfirm] = useState(false)
   const [showCompletion, setShowCompletion] = useState(false)
   const dimTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
+  // Use refs for values read inside the setTimeout to avoid stale closures
+  const showVolumeSliderRef = useRef(showVolumeSlider)
+  const showStopConfirmRef = useRef(showStopConfirm)
+  showVolumeSliderRef.current = showVolumeSlider
+  showStopConfirmRef.current = showStopConfirm
 
-  // Auto-dim controls
   const resetDimTimer = useCallback(() => {
     setControlsVisible(true)
     if (dimTimerRef.current) clearTimeout(dimTimerRef.current)
     dimTimerRef.current = setTimeout(() => {
-      if (!showVolumeSlider && !showStopConfirm) {
+      // Read from refs to avoid stale closure
+      if (!showVolumeSliderRef.current && !showStopConfirmRef.current) {
         setControlsVisible(false)
       }
     }, 10000)
-  }, [showVolumeSlider, showStopConfirm])
+  }, []) // No dependencies — reads from refs
 
+  // Start the dim timer on mount
   useEffect(() => {
     resetDimTimer()
     return () => {
@@ -74,12 +78,10 @@ export function Player({
     }
   }, [state.phase, showCompletion, onComplete])
 
-  const handleInteraction = () => {
-    if (!controlsVisible) {
-      setControlsVisible(true)
-    }
+  const handleInteraction = useCallback(() => {
+    setControlsVisible(true)
     resetDimTimer()
-  }
+  }, [resetDimTimer])
 
   // Progress
   const progress = state.duration > 0 ? state.elapsed / state.duration : 0
@@ -90,7 +92,7 @@ export function Player({
   const phaseLabel =
     state.phase === 'main' ? getMainPhaseLabel(preset, state.beatFreq) : phaseLabels[state.phase]
 
-  const orbSize = Math.min(window.innerWidth * 0.6, 300)
+  const orbSize = typeof window !== 'undefined' ? Math.min(window.innerWidth * 0.6, 300) : 300
 
   if (showCompletion) {
     return (
@@ -202,7 +204,7 @@ export function Player({
 
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-light tracking-tight tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <span className="text-4xl font-light tracking-tight" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {state.beatFreq.toFixed(1)} Hz
           </span>
           <span className="text-xs uppercase tracking-widest text-slate-400 mt-1">
@@ -220,8 +222,8 @@ export function Player({
           {phaseLabel}
         </p>
         <p
-          className="font-mono text-lg text-slate-400 tabular-nums transition-opacity duration-500"
-          style={{ opacity: controlsVisible ? 1 : 0.6 }}
+          className="font-mono text-lg text-slate-400 transition-opacity duration-500"
+          style={{ opacity: controlsVisible ? 1 : 0.6, fontVariantNumeric: 'tabular-nums' }}
         >
           {formatTime(state.elapsed)} / {formatTime(state.duration)}
         </p>
