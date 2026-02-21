@@ -114,6 +114,12 @@ export function Player({
 
   const orbSize = typeof window !== 'undefined' ? Math.min(window.innerWidth * 0.6, 300) : 300
 
+  // Sleep fade: for sleep presets, progressively dim the UI to pure black
+  const isSleepPreset = preset.category === 'sleep'
+  const sleepFadeOpacity = isSleepPreset
+    ? Math.min(1, Math.max(0, (progress - 0.3) / 0.4)) // 0 at 30%, 1 at 70%
+    : 0
+
   if (showCompletion) {
     return (
       <CompletionScreen
@@ -375,6 +381,14 @@ export function Player({
           )}
         </div>
       </div>
+
+      {/* Sleep fade overlay */}
+      {isSleepPreset && sleepFadeOpacity > 0 && (
+        <div
+          className="fixed inset-0 bg-black pointer-events-none transition-opacity duration-[3000ms]"
+          style={{ opacity: sleepFadeOpacity, zIndex: 40 }}
+        />
+      )}
 
       {/* Stop confirmation */}
       {showStopConfirm && (

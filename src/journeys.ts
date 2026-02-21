@@ -1,0 +1,160 @@
+import type { Journey } from './types'
+
+export const journeys: Journey[] = [
+  {
+    id: 'sleep-mastery',
+    name: 'Sleep Mastery',
+    description: 'A 7-day program to train your brain for deeper, more restorative sleep. Each day gradually introduces lower frequencies.',
+    category: 'sleep',
+    icon: '🌙',
+    color: '#6366f1',
+    days: [
+      {
+        day: 1,
+        presetId: 'deep-relax',
+        title: 'Relaxation Foundation',
+        tip: 'Start 30 minutes before your target bedtime. Dim all lights and put your phone on Do Not Disturb.',
+      },
+      {
+        day: 2,
+        presetId: 'deep-relax',
+        title: 'Deepening Relaxation',
+        tip: 'Try lying down with your eyes closed today. Focus on the sensation of each exhale.',
+      },
+      {
+        day: 3,
+        presetId: 'power-nap',
+        title: 'Theta Gateway',
+        tip: 'Today we introduce theta waves. Let your thoughts drift without engaging with them.',
+      },
+      {
+        day: 4,
+        presetId: 'sleep-drift',
+        title: 'First Delta Session',
+        tip: 'Your brain is now ready for delta frequencies. Let the tones carry you to sleep — no need to stay awake.',
+      },
+      {
+        day: 5,
+        presetId: 'sleep-drift',
+        title: 'Deepening Sleep',
+        tip: 'Keep a consistent bedtime. Your brain is starting to associate these tones with sleep onset.',
+      },
+      {
+        day: 6,
+        presetId: 'sleep-drift',
+        title: 'Full Descent',
+        tip: 'Enable the breathing guide tonight. Slow breathing combined with delta waves creates powerful sleep induction.',
+      },
+      {
+        day: 7,
+        presetId: 'sleep-drift',
+        title: 'Sleep Integration',
+        tip: 'Final session. After tonight, your brain will have stronger neural pathways for entering deep sleep.',
+      },
+    ],
+  },
+  {
+    id: 'meditation-fundamentals',
+    name: 'Meditation Foundations',
+    description: 'Build a consistent meditation practice over 7 days. Progressively deepens from alpha relaxation to sustained theta meditation.',
+    category: 'meditation',
+    icon: '🧘',
+    color: '#a855f7',
+    days: [
+      {
+        day: 1,
+        presetId: 'quick-calm',
+        title: 'Finding Stillness',
+        tip: 'Sit comfortably with your back straight. Simply listen to the tones — no need to "try" to meditate.',
+      },
+      {
+        day: 2,
+        presetId: 'quick-calm',
+        title: 'Breath Awareness',
+        tip: 'Enable the breathing guide today. Let it set your rhythm while the alpha waves calm your mind.',
+      },
+      {
+        day: 3,
+        presetId: 'deep-relax',
+        title: 'Extending Practice',
+        tip: 'Today is a longer session. When your mind wanders, gently return attention to the tones.',
+      },
+      {
+        day: 4,
+        presetId: 'creative-theta',
+        title: 'Entering Theta',
+        tip: 'Theta is where deep meditation happens. You may experience vivid imagery — let it flow.',
+      },
+      {
+        day: 5,
+        presetId: 'creative-theta',
+        title: 'Deepening Practice',
+        tip: 'Try not moving at all today. Physical stillness helps the mind settle into deeper states.',
+      },
+      {
+        day: 6,
+        presetId: 'theta-meditation',
+        title: 'Full Theta Session',
+        tip: 'Today is a full 35-minute theta session. This is the deepest meditation preset. Trust the process.',
+      },
+      {
+        day: 7,
+        presetId: 'theta-meditation',
+        title: 'Integration',
+        tip: 'Final session. Sit for a minute after the session ends to carry the calm into your day.',
+      },
+    ],
+  },
+  {
+    id: 'focus-intensive',
+    name: 'Focus Intensive',
+    description: '7 days to sharpen your concentration. Builds from calm focus to peak cognitive performance with gamma entrainment.',
+    category: 'focus',
+    icon: '🎯',
+    color: '#ef4444',
+    days: [
+      {
+        day: 1,
+        presetId: 'quick-calm',
+        title: 'Calm Baseline',
+        tip: 'Start with alpha to establish a calm, clear baseline. Use this time to set your intention for the week.',
+      },
+      {
+        day: 2,
+        presetId: 'focus-session',
+        title: 'SMR Training',
+        tip: 'Sensorimotor rhythm (15 Hz) is associated with calm alertness. Work on a single task during this session.',
+      },
+      {
+        day: 3,
+        presetId: 'focus-session',
+        title: 'Deep Work Block',
+        tip: 'Pair today\'s session with your most cognitively demanding task. Minimize distractions.',
+      },
+      {
+        day: 4,
+        presetId: 'focus-session',
+        title: 'Sustained Attention',
+        tip: 'If your attention drifts, acknowledge it and return to the task. The SMR rhythm supports this recovery.',
+      },
+      {
+        day: 5,
+        presetId: 'gamma-boost',
+        title: 'First Gamma Session',
+        tip: '40 Hz gamma is linked to peak cognitive performance. You may feel increased mental clarity.',
+      },
+      {
+        day: 6,
+        presetId: 'gamma-boost',
+        title: 'Cognitive Peak',
+        tip: 'Use this session for creative problem-solving or learning new material. Gamma enhances memory encoding.',
+      },
+      {
+        day: 7,
+        presetId: 'gamma-boost',
+        title: 'Integration',
+        tip: 'Final session. You\'ve trained your brain through alpha → SMR → gamma. Use any preset as needed going forward.',
+      },
+    ],
+  },
+]

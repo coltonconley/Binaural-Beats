@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react'
-import type { CompletedSession, UserStats, UserPreferences, MoodRating } from '../types'
+import type { CompletedSession, UserStats, UserPreferences, MoodRating, JourneyProgress } from '../types'
 
 const STORAGE_KEYS = {
   sessions: 'bb_sessions',
   stats: 'bb_stats',
   preferences: 'bb_preferences',
+  journeys: 'bb_journeys',
 } as const
 
 const DEFAULT_STATS: UserStats = {
@@ -79,6 +80,9 @@ export function useSessionHistory() {
   const [preferences, setPreferences] = useState<UserPreferences>(() =>
     readJSON(STORAGE_KEYS.preferences, DEFAULT_PREFERENCES),
   )
+  const [journeyProgress, setJourneyProgress] = useState<JourneyProgress[]>(() =>
+    readJSON(STORAGE_KEYS.journeys, []),
+  )
 
   const addSession = useCallback(
     (session: Omit<CompletedSession, 'id'>): CompletedSession => {
@@ -143,14 +147,70 @@ export function useSessionHistory() {
     [preferences],
   )
 
+  const startJourney = useCallback(
+    (journeyId: string): void => {
+      const existing = journeyProgress.find((j) => j.journeyId === journeyId)
+      if (existing) return // Already started
+
+      const progress: JourneyProgress = {
+        journeyId,
+        completedDays: [],
+        startedAt: new Date().toISOString(),
+        lastCompletedAt: null,
+      }
+      const updated = [...journeyProgress, progress]
+      setJourneyProgress(updated)
+      writeJSON(STORAGE_KEYS.journeys, updated)
+    },
+    [journeyProgress],
+  )
+
+  const completeJourneyDay = useCallback(
+    (journeyId: string, day: number): void => {
+      const updated = journeyProgress.map((j) => {
+        if (j.journeyId !== journeyId) return j
+        if (j.completedDays.includes(day)) return j
+        return {
+          ...j,
+          completedDays: [...j.completedDays, day],
+          lastCompletedAt: new Date().toISOString(),
+        }
+      })
+      setJourneyProgress(updated)
+      writeJSON(STORAGE_KEYS.journeys, updated)
+    },
+    [journeyProgress],
+  )
+
+  const resetJourney = useCallback(
+    (journeyId: string): void => {
+      const updated = journeyProgress.filter((j) => j.journeyId !== journeyId)
+      setJourneyProgress(updated)
+      writeJSON(STORAGE_KEYS.journeys, updated)
+    },
+    [journeyProgress],
+  )
+
+  const getJourneyProgress = useCallback(
+    (journeyId: string): JourneyProgress | undefined => {
+      return journeyProgress.find((j) => j.journeyId === journeyId)
+    },
+    [journeyProgress],
+  )
+
   return {
     sessions,
     stats,
     preferences,
+    journeyProgress,
     addSession,
     updateSessionMood,
     toggleFavorite,
     isFavorite,
     updatePreferences,
+    startJourney,
+    completeJourneyDay,
+    resetJourney,
+    getJourneyProgress,
   }
 }

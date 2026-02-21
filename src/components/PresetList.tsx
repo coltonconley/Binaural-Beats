@@ -1,13 +1,17 @@
 import { useState, useMemo } from 'react'
-import type { SessionPreset, PresetCategory, UserStats } from '../types'
+import type { SessionPreset, PresetCategory, UserStats, Journey, JourneyProgress } from '../types'
 import { presets, categoryLabels, categoryOrder, getRecommendedPresets, getTimeGreeting } from '../presets'
+import { journeys } from '../journeys'
 import { PresetCard } from './PresetCard'
+import { JourneyCard } from './JourneyCard'
 
 interface Props {
   onSelect: (preset: SessionPreset) => void
   stats?: UserStats
   favorites?: string[]
   onToggleFavorite?: (presetId: string) => void
+  journeyProgress?: JourneyProgress[]
+  onSelectJourney?: (journey: Journey) => void
 }
 
 type Filter = 'all' | 'favorites' | PresetCategory
@@ -19,7 +23,7 @@ function formatHours(minutes: number): string {
   return m > 0 ? `${h}.${Math.round((m / 60) * 10)}h` : `${h}h`
 }
 
-export function PresetList({ onSelect, stats, favorites = [], onToggleFavorite }: Props) {
+export function PresetList({ onSelect, stats, favorites = [], onToggleFavorite, journeyProgress = [], onSelectJourney }: Props) {
   const [filter, setFilter] = useState<Filter>('all')
 
   const hasFavorites = favorites.length > 0
@@ -129,8 +133,26 @@ export function PresetList({ onSelect, stats, favorites = [], onToggleFavorite }
         </div>
       )}
 
+      {/* Journeys section */}
+      {filter === 'all' && onSelectJourney && (
+        <div className="mb-6">
+          <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">7-Day Journeys</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {journeys.map((journey, i) => (
+              <div key={journey.id} className="animate-fade-in-up" style={{ animationDelay: `${i * 50}ms` }}>
+                <JourneyCard
+                  journey={journey}
+                  progress={journeyProgress.find((p) => p.journeyId === journey.id)}
+                  onSelect={onSelectJourney}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* All presets section header */}
-      {filter === 'all' && recommended.length > 0 && (
+      {filter === 'all' && (recommended.length > 0 || onSelectJourney) && (
         <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">All sessions</p>
       )}
 

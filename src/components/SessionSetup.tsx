@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { SessionPreset, SessionOptions } from '../types'
 import { bandInfo } from '../presets'
 import { FrequencySparkline } from './FrequencySparkline'
+import { usePreviewTone } from '../hooks/usePreviewTone'
 
 interface Props {
   preset: SessionPreset
@@ -18,9 +19,12 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
   const [volume, setVolume] = useState(70)
   const [isochronicEnabled, setIsochronicEnabled] = useState(false)
   const [breathingGuideEnabled, setBreathingGuideEnabled] = useState(false)
+  const [isPreviewing, setIsPreviewing] = useState(false)
   const band = bandInfo[preset.targetBand]
+  const preview = usePreviewTone()
 
   const handleBegin = () => {
+    preview.stop()
     onBegin(preset, {
       isochronicEnabled,
       breathingGuideEnabled,
@@ -28,14 +32,29 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
     })
   }
 
+  const handlePreview = useCallback(() => {
+    if (isPreviewing) {
+      preview.stop()
+      setIsPreviewing(false)
+    } else {
+      preview.play(preset, volume / 100)
+      setIsPreviewing(true)
+      // Auto-reset after preview duration
+      setTimeout(() => setIsPreviewing(false), 5500)
+    }
+  }, [isPreviewing, preset, volume, preview])
+
   // Close on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        preview.stop()
+        onClose()
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [onClose, preview])
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-label={`${preset.name} session setup`}>
@@ -75,6 +94,33 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
               height={50}
             />
           </div>
+
+          {/* Preview button */}
+          <button
+            onClick={handlePreview}
+            className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium transition-all mb-5 ${
+              isPreviewing
+                ? 'text-white border border-white/20'
+                : 'text-slate-300 border border-white/10 hover:border-white/20'
+            }`}
+            style={isPreviewing ? { background: `${preset.color}15` } : undefined}
+          >
+            {isPreviewing ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <rect x="2" y="2" width="10" height="10" rx="1.5" />
+                </svg>
+                Stop Preview
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <path d="M3 1l10 6-10 6V1z" />
+                </svg>
+                Preview Sound
+              </>
+            )}
+          </button>
 
           {/* Detail pills */}
           <div className="flex flex-wrap gap-2 mb-6">

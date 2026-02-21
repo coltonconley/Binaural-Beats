@@ -1,12 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import type { SessionPreset, SessionOptions, MoodRating } from './types'
+import type { SessionPreset, SessionOptions, MoodRating, Journey } from './types'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { useWakeLock } from './hooks/useWakeLock'
 import { useSessionHistory } from './hooks/useSessionHistory'
+import { useMediaSession } from './hooks/useMediaSession'
 import { Onboarding } from './components/Onboarding'
 import { PresetList } from './components/PresetList'
 import { SessionSetup } from './components/SessionSetup'
 import { Player } from './components/Player'
+import { JourneyDetail } from './components/JourneyDetail'
 
 type View = 'discover' | 'setup' | 'countdown' | 'session'
 
@@ -27,6 +29,8 @@ function App() {
   const history = useSessionHistory()
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval>>(null)
   const [lastCompletedSessionId, setLastCompletedSessionId] = useState<string | null>(null)
+  const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
+  const [activeJourneyDay, setActiveJourneyDay] = useState<{ journeyId: string; day: number } | null>(null)
 
   // Clean up countdown interval on unmount
   useEffect(() => {
@@ -91,6 +95,18 @@ function App() {
     setView('discover')
   }, [audio, wakeLock])
 
+  // MediaSession API for lock screen controls + silent audio keepalive
+  useMediaSession({
+    preset: audio.state.activePreset,
+    isPlaying: audio.state.isPlaying,
+    isPaused: audio.state.isPaused,
+    elapsed: audio.state.elapsed,
+    duration: audio.state.duration,
+    onPause: audio.pause,
+    onResume: audio.resume,
+    onStop: handleStopSession,
+  })
+
   const handleSessionComplete = useCallback(() => {
     wakeLock.release()
     if (audio.state.activePreset) {
@@ -103,8 +119,14 @@ function App() {
         completedFull: true,
       })
       setLastCompletedSessionId(session.id)
+
+      // Mark journey day as complete if this was a journey session
+      if (activeJourneyDay) {
+        history.completeJourneyDay(activeJourneyDay.journeyId, activeJourneyDay.day)
+        setActiveJourneyDay(null)
+      }
     }
-  }, [wakeLock, audio.state, history])
+  }, [wakeLock, audio.state, history, activeJourneyDay])
 
   const handleMoodSelect = useCallback(
     (mood: MoodRating) => {
@@ -114,6 +136,22 @@ function App() {
     },
     [lastCompletedSessionId, history],
   )
+
+  const handleSelectJourney = useCallback((journey: Journey) => {
+    setSelectedJourney(journey)
+  }, [])
+
+  const handleJourneyClose = useCallback(() => {
+    setSelectedJourney(null)
+  }, [])
+
+  const handleStartJourneyDay = useCallback((preset: SessionPreset, journeyId: string, day: number) => {
+    history.startJourney(journeyId)
+    setActiveJourneyDay({ journeyId, day })
+    setSelectedJourney(null)
+    setSelectedPreset(preset)
+    setView('setup')
+  }, [history])
 
   const handleOnboardingComplete = useCallback(() => {
     try {
@@ -162,7 +200,19 @@ function App() {
         stats={history.stats}
         favorites={history.preferences.favorites}
         onToggleFavorite={history.toggleFavorite}
+        journeyProgress={history.journeyProgress}
+        onSelectJourney={handleSelectJourney}
       />
+
+      {selectedJourney && (
+        <JourneyDetail
+          journey={selectedJourney}
+          progress={history.getJourneyProgress(selectedJourney.id)}
+          onClose={handleJourneyClose}
+          onStartDay={handleStartJourneyDay}
+          onReset={history.resetJourney}
+        />
+      )}
 
       {view === 'setup' && selectedPreset && (
         <SessionSetup
