@@ -28,6 +28,7 @@ export function useMediaSession({
   onStop,
 }: MediaSessionOptions) {
   const silentAudioRef = useRef<HTMLAudioElement | null>(null)
+  const blobUrlRef = useRef<string | null>(null)
 
   // Create and manage silent audio keepalive
   const startKeepalive = useCallback(() => {
@@ -64,6 +65,7 @@ export function useMediaSession({
 
       const blob = new Blob([buffer], { type: 'audio/wav' })
       const url = URL.createObjectURL(blob)
+      blobUrlRef.current = url
 
       const audio = new Audio(url)
       audio.loop = true
@@ -81,6 +83,10 @@ export function useMediaSession({
       silentAudioRef.current.pause()
       silentAudioRef.current.src = ''
       silentAudioRef.current = null
+    }
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current)
+      blobUrlRef.current = null
     }
   }, [])
 

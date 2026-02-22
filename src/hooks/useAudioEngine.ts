@@ -31,6 +31,7 @@ const initialState: AudioEngineState = {
 export function useAudioEngine() {
   const managerRef = useRef<SessionManager | null>(null)
   const volumeRef = useRef(0.7)
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [state, setState] = useState<AudioEngineState>(initialState)
 
   const getManager = useCallback(() => {
@@ -90,10 +91,15 @@ export function useAudioEngine() {
   }, [getManager])
 
   const stop = useCallback(() => {
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current)
+      fadeTimerRef.current = null
+    }
     const manager = getManager()
     // Fade out audio briefly before full stop to avoid abrupt cutoff
     manager.fadeOut(0.3)
-    setTimeout(() => {
+    fadeTimerRef.current = setTimeout(() => {
+      fadeTimerRef.current = null
       manager.stop()
     }, 350)
     setState({ ...initialState, volume: volumeRef.current })
@@ -123,6 +129,9 @@ export function useAudioEngine() {
 
   useEffect(() => {
     return () => {
+      if (fadeTimerRef.current) {
+        clearTimeout(fadeTimerRef.current)
+      }
       managerRef.current?.stop()
     }
   }, [])

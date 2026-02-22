@@ -231,8 +231,7 @@ export class SessionManager {
     if (document.visibilityState === 'hidden') {
       this.fallbackInterval = setInterval(this.tick, 1000)
     } else {
-      // Returning to foreground — do an immediate tick then resume rAF
-      this.tick()
+      // Returning to foreground — resume rAF loop (tick will self-schedule)
       this.animFrameId = requestAnimationFrame(this.tick)
     }
   }

@@ -100,6 +100,7 @@ export function usePreviewTone() {
         noiseSource.start()
         // Fade noise in
         const noiseFadeTarget = preset.noiseVolume * volume * 0.3 // Keep noise quieter in preview
+        noiseGain.gain.setValueAtTime(0, ctx.currentTime)
         noiseGain.gain.linearRampToValueAtTime(noiseFadeTarget, ctx.currentTime + 0.8)
         // Fade noise out before end
         noiseGain.gain.setValueAtTime(noiseFadeTarget, ctx.currentTime + 4)
@@ -111,6 +112,7 @@ export function usePreviewTone() {
 
       // Fade in over 0.8s
       const adjustedVolume = volume * 0.3 // Keep oscillators at 30% of set volume
+      masterGain.gain.setValueAtTime(0, ctx.currentTime)
       masterGain.gain.linearRampToValueAtTime(adjustedVolume, ctx.currentTime + 0.8)
 
       // Hold for ~4s, then fade out over 1s

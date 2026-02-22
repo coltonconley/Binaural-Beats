@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function BreathingGuide({ size, hapticEnabled = false }: Props) {
-  const [phase, setPhase] = useState<'in' | 'out'>('in')
+  const [phase, setPhase] = useState<'in' | 'out'>('out')
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const haptics = useHaptics()
 

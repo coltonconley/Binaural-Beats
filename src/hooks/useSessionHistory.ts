@@ -91,46 +91,54 @@ export function useSessionHistory() {
         id: crypto.randomUUID(),
       }
 
-      const updated = [complete, ...sessions].slice(0, MAX_SESSIONS)
-      setSessions(updated)
-      writeJSON(STORAGE_KEYS.sessions, updated)
+      setSessions((prev) => {
+        const updated = [complete, ...prev].slice(0, MAX_SESSIONS)
+        writeJSON(STORAGE_KEYS.sessions, updated)
+        return updated
+      })
 
-      const streakUpdate = computeStreakUpdate(stats)
-      const newStats: UserStats = {
-        totalSessions: stats.totalSessions + 1,
-        totalMinutes: stats.totalMinutes + Math.round(session.durationSeconds / 60),
-        ...streakUpdate,
-      }
-      setStats(newStats)
-      writeJSON(STORAGE_KEYS.stats, newStats)
+      setStats((prev) => {
+        const streakUpdate = computeStreakUpdate(prev)
+        const newStats: UserStats = {
+          totalSessions: prev.totalSessions + 1,
+          totalMinutes: prev.totalMinutes + Math.round(session.durationSeconds / 60),
+          ...streakUpdate,
+        }
+        writeJSON(STORAGE_KEYS.stats, newStats)
+        return newStats
+      })
 
       return complete
     },
-    [sessions, stats],
+    [],
   )
 
   const updateSessionMood = useCallback(
     (sessionId: string, mood: MoodRating): void => {
-      const updated = sessions.map((s) =>
-        s.id === sessionId ? { ...s, mood } : s,
-      )
-      setSessions(updated)
-      writeJSON(STORAGE_KEYS.sessions, updated)
+      setSessions((prev) => {
+        const updated = prev.map((s) =>
+          s.id === sessionId ? { ...s, mood } : s,
+        )
+        writeJSON(STORAGE_KEYS.sessions, updated)
+        return updated
+      })
     },
-    [sessions],
+    [],
   )
 
   const toggleFavorite = useCallback(
     (presetId: string): void => {
-      const favs = preferences.favorites
-      const next = favs.includes(presetId)
-        ? favs.filter((id) => id !== presetId)
-        : [...favs, presetId]
-      const updated = { ...preferences, favorites: next }
-      setPreferences(updated)
-      writeJSON(STORAGE_KEYS.preferences, updated)
+      setPreferences((prev) => {
+        const favs = prev.favorites
+        const next = favs.includes(presetId)
+          ? favs.filter((id) => id !== presetId)
+          : [...favs, presetId]
+        const updated = { ...prev, favorites: next }
+        writeJSON(STORAGE_KEYS.preferences, updated)
+        return updated
+      })
     },
-    [preferences],
+    [],
   )
 
   const isFavorite = useCallback(
@@ -140,55 +148,63 @@ export function useSessionHistory() {
 
   const updatePreferences = useCallback(
     (partial: Partial<UserPreferences>): void => {
-      const updated = { ...preferences, ...partial }
-      setPreferences(updated)
-      writeJSON(STORAGE_KEYS.preferences, updated)
+      setPreferences((prev) => {
+        const updated = { ...prev, ...partial }
+        writeJSON(STORAGE_KEYS.preferences, updated)
+        return updated
+      })
     },
-    [preferences],
+    [],
   )
 
   const startJourney = useCallback(
     (journeyId: string): void => {
-      const existing = journeyProgress.find((j) => j.journeyId === journeyId)
-      if (existing) return // Already started
+      setJourneyProgress((prev) => {
+        const existing = prev.find((j) => j.journeyId === journeyId)
+        if (existing) return prev // Already started
 
-      const progress: JourneyProgress = {
-        journeyId,
-        completedDays: [],
-        startedAt: new Date().toISOString(),
-        lastCompletedAt: null,
-      }
-      const updated = [...journeyProgress, progress]
-      setJourneyProgress(updated)
-      writeJSON(STORAGE_KEYS.journeys, updated)
+        const progress: JourneyProgress = {
+          journeyId,
+          completedDays: [],
+          startedAt: new Date().toISOString(),
+          lastCompletedAt: null,
+        }
+        const updated = [...prev, progress]
+        writeJSON(STORAGE_KEYS.journeys, updated)
+        return updated
+      })
     },
-    [journeyProgress],
+    [],
   )
 
   const completeJourneyDay = useCallback(
     (journeyId: string, day: number): void => {
-      const updated = journeyProgress.map((j) => {
-        if (j.journeyId !== journeyId) return j
-        if (j.completedDays.includes(day)) return j
-        return {
-          ...j,
-          completedDays: [...j.completedDays, day],
-          lastCompletedAt: new Date().toISOString(),
-        }
+      setJourneyProgress((prev) => {
+        const updated = prev.map((j) => {
+          if (j.journeyId !== journeyId) return j
+          if (j.completedDays.includes(day)) return j
+          return {
+            ...j,
+            completedDays: [...j.completedDays, day],
+            lastCompletedAt: new Date().toISOString(),
+          }
+        })
+        writeJSON(STORAGE_KEYS.journeys, updated)
+        return updated
       })
-      setJourneyProgress(updated)
-      writeJSON(STORAGE_KEYS.journeys, updated)
     },
-    [journeyProgress],
+    [],
   )
 
   const resetJourney = useCallback(
     (journeyId: string): void => {
-      const updated = journeyProgress.filter((j) => j.journeyId !== journeyId)
-      setJourneyProgress(updated)
-      writeJSON(STORAGE_KEYS.journeys, updated)
+      setJourneyProgress((prev) => {
+        const updated = prev.filter((j) => j.journeyId !== journeyId)
+        writeJSON(STORAGE_KEYS.journeys, updated)
+        return updated
+      })
     },
-    [journeyProgress],
+    [],
   )
 
   const getJourneyProgress = useCallback(

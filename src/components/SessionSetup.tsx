@@ -61,7 +61,10 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 animate-fade-in"
-        onClick={onClose}
+        onClick={() => {
+          preview.stop()
+          onClose()
+        }}
       />
 
       {/* Sheet */}
