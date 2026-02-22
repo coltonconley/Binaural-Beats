@@ -52,6 +52,36 @@ export const presets: SessionPreset[] = [
     ambientVolume: 0.4,
   },
 
+  {
+    id: 'anxiety-relief',
+    name: 'Anxiety Relief',
+    description: 'Evidence-based alpha-theta protocol for anxiety reduction. Gentle U-shaped curve with a brief theta dip for emotional processing, then safe return to alpha.',
+    category: 'relaxation',
+    targetBand: 'alpha',
+    duration: 1800,
+    carriers: [
+      { carrierFreq: 180, gainDb: 0 },
+      { carrierFreq: 360, gainDb: -6 },
+    ],
+    frequencyEnvelope: [
+      { time: 0, beatFreq: 12 },
+      { time: 180, beatFreq: 10 },      // ramp 3 min
+      { time: 480, beatFreq: 8 },       // ramp 5 min
+      { time: 960, beatFreq: 8 },       // hold 8 min
+      { time: 1200, beatFreq: 6 },      // theta dip 4 min
+      { time: 1500, beatFreq: 8 },      // return to alpha 5 min
+      { time: 1800, beatFreq: 10 },     // return 5 min
+    ],
+    noiseType: 'pink',
+    noiseVolume: 0.45,
+    hasReturnPhase: true,
+    isochronicAvailable: true,
+    icon: '🫧',
+    color: '#06b6d4',
+    ambientSound: 'ocean',
+    ambientVolume: 0.45,
+  },
+
   // ── Meditation ──────────────────────────────────────────────
   {
     id: 'theta-meditation',
@@ -104,6 +134,33 @@ export const presets: SessionPreset[] = [
     ambientVolume: 0.35,
   },
 
+  {
+    id: 'schumann-resonance',
+    name: 'Schumann Resonance',
+    description: 'Earth\'s natural 7.83 Hz electromagnetic frequency for grounding and stress reduction. Brown noise and forest ambient for an organic, earthy feel.',
+    category: 'meditation',
+    targetBand: 'alpha',
+    duration: 1800,
+    carriers: [
+      { carrierFreq: 200, gainDb: 0 },
+      { carrierFreq: 400, gainDb: -6 },
+    ],
+    frequencyEnvelope: [
+      { time: 0, beatFreq: 10 },
+      { time: 180, beatFreq: 7.83 },    // ramp 3 min
+      { time: 1500, beatFreq: 7.83 },   // hold 22 min
+      { time: 1800, beatFreq: 10 },     // return 5 min
+    ],
+    noiseType: 'brown',
+    noiseVolume: 0.4,
+    hasReturnPhase: true,
+    isochronicAvailable: false,
+    icon: '🌍',
+    color: '#059669',
+    ambientSound: 'forest',
+    ambientVolume: 0.4,
+  },
+
   // ── Focus ───────────────────────────────────────────────────
   {
     id: 'focus-session',
@@ -152,6 +209,35 @@ export const presets: SessionPreset[] = [
     isochronicAvailable: true,
     icon: '⚡',
     color: '#f97316',
+    ambientSound: 'none',
+    ambientVolume: 0,
+  },
+
+  {
+    id: 'peak-cognition',
+    name: 'Peak Cognition',
+    description: 'Research-optimized 40 Hz gamma protocol for working memory and cognitive performance. Dual-carrier with wider frequency spread and intermediate beta stage.',
+    category: 'focus',
+    targetBand: 'gamma',
+    duration: 1500,
+    carriers: [
+      { carrierFreq: 315, gainDb: 0 },
+      { carrierFreq: 475, gainDb: -4 },
+    ],
+    frequencyEnvelope: [
+      { time: 0, beatFreq: 12 },
+      { time: 180, beatFreq: 20 },      // ramp to beta 3 min
+      { time: 420, beatFreq: 40 },      // ramp to gamma 4 min
+      { time: 1140, beatFreq: 40 },     // hold 12 min cognitive window
+      { time: 1320, beatFreq: 20 },     // return to beta 3 min
+      { time: 1500, beatFreq: 12 },     // return 3 min
+    ],
+    noiseType: 'pink',
+    noiseVolume: 0.15,
+    hasReturnPhase: true,
+    isochronicAvailable: true,
+    icon: '🧠',
+    color: '#f59e0b',
     ambientSound: 'none',
     ambientVolume: 0,
   },
@@ -208,6 +294,36 @@ export const presets: SessionPreset[] = [
     color: '#8b5cf6',
     ambientSound: 'ocean',
     ambientVolume: 0.4,
+  },
+
+  {
+    id: 'lucid-gateway',
+    name: 'Lucid Gateway',
+    description: 'WILD-inspired protocol for lucid dream induction. Oscillating theta-delta pattern maintains a thread of awareness at the sleep boundary. Fades to silence.',
+    category: 'sleep',
+    targetBand: 'theta',
+    duration: 2400,
+    carriers: [
+      { carrierFreq: 120, gainDb: 0 },
+      { carrierFreq: 240, gainDb: -6 },
+    ],
+    frequencyEnvelope: [
+      { time: 0, beatFreq: 10 },
+      { time: 240, beatFreq: 7 },       // ramp 4 min
+      { time: 540, beatFreq: 5 },       // ramp 5 min
+      { time: 1020, beatFreq: 3 },      // ramp 8 min — edge of sleep
+      { time: 1320, beatFreq: 5 },      // theta rebound 5 min
+      { time: 1920, beatFreq: 3 },      // re-descend 10 min
+      { time: 2400, beatFreq: 2 },      // deep delta 8 min — no return
+    ],
+    noiseType: 'brown',
+    noiseVolume: 0.45,
+    hasReturnPhase: false,
+    isochronicAvailable: false,
+    icon: '🦋',
+    color: '#8b5cf6',
+    ambientSound: 'rain',
+    ambientVolume: 0.3,
   },
 
   // ── Advanced ────────────────────────────────────────────────
@@ -267,6 +383,105 @@ export const presets: SessionPreset[] = [
     color: '#14b8a6',
     ambientSound: 'forest',
     ambientVolume: 0.3,
+  },
+  {
+    id: 'gateway-focus12',
+    name: 'Focus 12',
+    description: 'Monroe-style expanded awareness. Two-stage descent holds at Focus 10 (4 Hz) before deepening to Focus 12 (3.5 Hz), mimicking Gateway Exercise structure.',
+    category: 'advanced',
+    targetBand: 'theta',
+    duration: 2700,
+    carriers: [
+      { carrierFreq: 100, gainDb: 0 },
+      { carrierFreq: 200, gainDb: -6 },
+      { carrierFreq: 400, gainDb: -9 },
+    ],
+    frequencyEnvelope: [
+      { time: 0, beatFreq: 10 },
+      { time: 300, beatFreq: 4 },       // ramp 5 min to Focus 10
+      { time: 600, beatFreq: 4 },       // hold 5 min at Focus 10
+      { time: 1080, beatFreq: 3.5 },    // ramp 8 min to Focus 12
+      { time: 1800, beatFreq: 3.5 },    // hold 12 min at Focus 12
+      { time: 2100, beatFreq: 4 },      // return through Focus 10 (5 min)
+      { time: 2400, beatFreq: 10 },     // return to waking (5 min)
+      { time: 2700, beatFreq: 10 },     // hold 5 min
+    ],
+    noiseType: 'pink',
+    noiseVolume: 0.35,
+    hasReturnPhase: true,
+    isochronicAvailable: false,
+    icon: '🔮',
+    color: '#d946ef',
+    ambientSound: 'stream',
+    ambientVolume: 0.3,
+  },
+  {
+    id: 'gateway-focus15',
+    name: 'Focus 15',
+    description: 'The "No-Time" state — deep delta-theta border. Three-stage descent through Focus 10 → 12 → 15, with extended hold at 2 Hz. Quad carrier for maximum hemispheric entrainment.',
+    category: 'advanced',
+    targetBand: 'delta',
+    duration: 3300,
+    carriers: [
+      { carrierFreq: 100, gainDb: 0 },
+      { carrierFreq: 200, gainDb: -6 },
+      { carrierFreq: 400, gainDb: -9 },
+      { carrierFreq: 300, gainDb: -12 },
+    ],
+    frequencyEnvelope: [
+      { time: 0, beatFreq: 10 },
+      { time: 300, beatFreq: 4 },       // ramp 5 min to Focus 10
+      { time: 600, beatFreq: 3.5 },     // ramp 5 min to Focus 12
+      { time: 1080, beatFreq: 2 },      // ramp 8 min to Focus 15
+      { time: 2280, beatFreq: 2 },      // hold 20 min — deep "no time"
+      { time: 2700, beatFreq: 3.5 },    // return 7 min
+      { time: 2940, beatFreq: 4 },      // return 4 min
+      { time: 3180, beatFreq: 10 },     // return 4 min
+      { time: 3300, beatFreq: 10 },     // hold 2 min
+    ],
+    noiseType: 'brown',
+    noiseVolume: 0.3,
+    hasReturnPhase: true,
+    isochronicAvailable: false,
+    icon: '🌀',
+    color: '#7c3aed',
+    ambientSound: 'none',
+    ambientVolume: 0,
+  },
+  {
+    id: 'gateway-focus21',
+    name: 'Focus 21',
+    description: 'Edge of perception — the deepest Gateway focus level. Four-stage descent through all focus levels with extended gradual return for safe re-integration. Longest session in the app.',
+    category: 'advanced',
+    targetBand: 'delta',
+    duration: 3600,
+    carriers: [
+      { carrierFreq: 100, gainDb: 0 },
+      { carrierFreq: 200, gainDb: -6 },
+      { carrierFreq: 400, gainDb: -9 },
+      { carrierFreq: 300, gainDb: -12 },
+    ],
+    frequencyEnvelope: [
+      { time: 0, beatFreq: 10 },
+      { time: 240, beatFreq: 4 },       // ramp 4 min to Focus 10
+      { time: 420, beatFreq: 3.5 },     // ramp 3 min to Focus 12
+      { time: 720, beatFreq: 2 },       // ramp 5 min to Focus 15
+      { time: 1080, beatFreq: 1.5 },    // ramp 6 min to Focus 21
+      { time: 2400, beatFreq: 1.5 },    // hold 22 min
+      { time: 2760, beatFreq: 2 },      // return 6 min
+      { time: 3000, beatFreq: 3.5 },    // return 4 min
+      { time: 3240, beatFreq: 4 },      // return 4 min
+      { time: 3540, beatFreq: 10 },     // return 5 min
+      { time: 3600, beatFreq: 10 },     // hold 1 min
+    ],
+    noiseType: 'brown',
+    noiseVolume: 0.25,
+    hasReturnPhase: true,
+    isochronicAvailable: false,
+    icon: '✨',
+    color: '#4f46e5',
+    ambientSound: 'none',
+    ambientVolume: 0,
   },
 ]
 
