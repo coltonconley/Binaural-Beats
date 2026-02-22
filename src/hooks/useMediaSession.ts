@@ -10,6 +10,7 @@ interface MediaSessionOptions {
   onPause: () => void
   onResume: () => void
   onStop: () => void
+  onSeek?: (time: number) => void
 }
 
 /**
@@ -26,6 +27,7 @@ export function useMediaSession({
   onPause,
   onResume,
   onStop,
+  onSeek,
 }: MediaSessionOptions) {
   const silentAudioRef = useRef<HTMLAudioElement | null>(null)
   const blobUrlRef = useRef<string | null>(null)
@@ -106,6 +108,9 @@ export function useMediaSession({
       navigator.mediaSession.setActionHandler('play', () => onResume())
       navigator.mediaSession.setActionHandler('pause', () => onPause())
       navigator.mediaSession.setActionHandler('stop', () => onStop())
+      navigator.mediaSession.setActionHandler('seekto', onSeek ? (details) => {
+        if (details.seekTime != null) onSeek(details.seekTime)
+      } : null)
 
       // Position state for progress on lock screen
       try {
@@ -126,9 +131,10 @@ export function useMediaSession({
         navigator.mediaSession.setActionHandler('play', null)
         navigator.mediaSession.setActionHandler('pause', null)
         navigator.mediaSession.setActionHandler('stop', null)
+        navigator.mediaSession.setActionHandler('seekto', null)
       }
     }
-  }, [preset, isPlaying, isPaused, elapsed, duration, onPause, onResume, onStop])
+  }, [preset, isPlaying, isPaused, elapsed, duration, onPause, onResume, onStop, onSeek])
 
   // Start/stop keepalive with session
   useEffect(() => {
