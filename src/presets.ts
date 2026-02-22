@@ -276,9 +276,10 @@ export const categoryLabels: Record<string, string> = {
   focus: 'Focus',
   sleep: 'Sleep',
   advanced: 'Advanced',
+  custom: 'Custom',
 }
 
-export const categoryOrder = ['relaxation', 'meditation', 'focus', 'sleep', 'advanced'] as const
+export const categoryOrder = ['relaxation', 'meditation', 'focus', 'sleep', 'advanced', 'custom'] as const
 
 export const bandInfo: Record<string, { label: string; range: string; description: string }> = {
   delta: { label: 'Delta', range: '0.5–4 Hz', description: 'Deep sleep, restoration' },

@@ -6,7 +6,7 @@ export type AmbientSoundType = 'rain' | 'ocean' | 'forest' | 'fire' | 'wind' | '
 
 export type SessionPhase = 'idle' | 'induction' | 'main' | 'return' | 'complete'
 
-export type PresetCategory = 'meditation' | 'focus' | 'sleep' | 'relaxation' | 'advanced'
+export type PresetCategory = 'meditation' | 'focus' | 'sleep' | 'relaxation' | 'advanced' | 'custom'
 
 export interface FrequencyPoint {
   /** Time offset in seconds from session start */

@@ -4,12 +4,14 @@ import { useAudioEngine } from './hooks/useAudioEngine'
 import { useWakeLock } from './hooks/useWakeLock'
 import { useSessionHistory } from './hooks/useSessionHistory'
 import { useMediaSession } from './hooks/useMediaSession'
+import { useCustomPresets } from './hooks/useCustomPresets'
 import { Onboarding } from './components/Onboarding'
 import { PresetList } from './components/PresetList'
 import { SessionSetup } from './components/SessionSetup'
 import { Player } from './components/Player'
 import { CompletionScreen } from './components/CompletionScreen'
 import { JourneyDetail } from './components/JourneyDetail'
+import { SessionBuilder } from './components/SessionBuilder'
 
 type View = 'discover' | 'setup' | 'countdown' | 'session'
 
@@ -28,6 +30,7 @@ function App() {
   const audio = useAudioEngine()
   const wakeLock = useWakeLock()
   const history = useSessionHistory()
+  const custom = useCustomPresets()
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval>>(null)
   const [lastCompletedSessionId, setLastCompletedSessionId] = useState<string | null>(null)
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
@@ -35,6 +38,8 @@ function App() {
   const [completionPreset, setCompletionPreset] = useState<SessionPreset | null>(null)
   const [earlyExitDuration, setEarlyExitDuration] = useState(0)
   const [completedFull, setCompletedFull] = useState(true)
+  const [showBuilder, setShowBuilder] = useState(false)
+  const [editingPreset, setEditingPreset] = useState<SessionPreset | null>(null)
 
   // Clean up countdown interval on unmount
   useEffect(() => {
@@ -197,6 +202,26 @@ function App() {
     setShowOnboarding(false)
   }, [])
 
+  const handleCreateCustom = useCallback(() => {
+    setEditingPreset(null)
+    setShowBuilder(true)
+  }, [])
+
+  const handleEditCustom = useCallback((preset: SessionPreset) => {
+    setEditingPreset(preset)
+    setShowBuilder(true)
+  }, [])
+
+  const handleDeleteCustom = useCallback((id: string) => {
+    custom.deletePreset(id)
+  }, [custom])
+
+  const handleSaveCustom = useCallback((preset: SessionPreset) => {
+    custom.savePreset(preset)
+    setShowBuilder(false)
+    setEditingPreset(null)
+  }, [custom])
+
   if (showOnboarding) {
     return <Onboarding onComplete={handleOnboardingComplete} />
   }
@@ -254,6 +279,10 @@ function App() {
         onToggleFavorite={history.toggleFavorite}
         journeyProgress={history.journeyProgress}
         onSelectJourney={handleSelectJourney}
+        customPresets={custom.customPresets}
+        onCreateCustom={handleCreateCustom}
+        onEditCustom={handleEditCustom}
+        onDeleteCustom={handleDeleteCustom}
       />
 
       {selectedJourney && (
@@ -271,6 +300,14 @@ function App() {
           preset={selectedPreset}
           onClose={handleSetupClose}
           onBegin={handleBeginSession}
+        />
+      )}
+
+      {showBuilder && (
+        <SessionBuilder
+          editingPreset={editingPreset}
+          onSave={handleSaveCustom}
+          onClose={() => { setShowBuilder(false); setEditingPreset(null) }}
         />
       )}
     </div>

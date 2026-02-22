@@ -81,6 +81,11 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes pulse-ring {
+  0% { r: 8; opacity: 0.4; }
+  100% { r: 18; opacity: 0; }
+}
+
 .animate-fade-in-up {
   animation: fade-in-up 0.4s ease-out both;
 }
@@ -103,6 +108,21 @@ body {
 
 .animate-orb-glow {
   animation: orb-glow-pulse 4s ease-in-out infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 1s ease-out infinite;
+}
+
+.create-session-card {
+  background: transparent;
+  border: 2px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+}
+
+.create-session-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 /* Range slider */
