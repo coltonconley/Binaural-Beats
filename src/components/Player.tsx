@@ -1,25 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { AudioEngineState } from '../hooks/useAudioEngine'
-import type { UserStats, MoodRating, AmbientSoundType } from '../types'
+import type { AmbientSoundType } from '../types'
 import { phaseLabels, getMainPhaseLabel } from '../presets'
 import { Visualizer } from './Visualizer'
 import { BreathingGuide } from './BreathingGuide'
-import { CompletionScreen } from './CompletionScreen'
 import { ambientSounds } from '../audio/ambientSounds'
 
 interface Props {
   state: AudioEngineState
   onPause: () => void
   onResume: () => void
-  onStop: () => void
+  onEarlyStop: () => void
+  onSeek: (time: number) => void
   onVolumeChange: (v: number) => void
   onToggleIsochronic: () => void
   onToggleBreathingGuide: () => void
   onAmbientVolumeChange: (v: number) => void
   onAmbientSoundChange: (sound: AmbientSoundType) => void
   onComplete: () => void
-  onMoodSelect: (mood: MoodRating) => void
-  stats: UserStats
   hapticEnabled: boolean
   getAnalyser: () => AnalyserNode | null
 }
@@ -42,15 +40,14 @@ export function Player({
   state,
   onPause,
   onResume,
-  onStop,
+  onEarlyStop,
+  onSeek,
   onVolumeChange,
   onToggleIsochronic,
   onToggleBreathingGuide,
   onAmbientVolumeChange,
   onAmbientSoundChange,
   onComplete,
-  onMoodSelect,
-  stats,
   hapticEnabled,
   getAnalyser,
 }: Props) {
@@ -58,7 +55,6 @@ export function Player({
   const [controlsVisible, setControlsVisible] = useState(true)
   const [showVolumeSlider, setShowVolumeSlider] = useState(false)
   const [showStopConfirm, setShowStopConfirm] = useState(false)
-  const [showCompletion, setShowCompletion] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const dimTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   // Use refs for values read inside the setTimeout to avoid stale closures
@@ -90,11 +86,10 @@ export function Player({
 
   // Handle completion
   useEffect(() => {
-    if (state.phase === 'complete' && !showCompletion) {
-      setShowCompletion(true)
+    if (state.phase === 'complete') {
       onComplete()
     }
-  }, [state.phase, showCompletion, onComplete])
+  }, [state.phase, onComplete])
 
   const handleInteraction = useCallback(() => {
     setControlsVisible(true)
@@ -108,10 +103,9 @@ export function Player({
     handleInteraction()
   }, [showVolumeSlider, showSettings, handleInteraction])
 
-  // Progress
+  // Progress (raw, used for sleep fade)
   const progress = state.duration > 0 ? state.elapsed / state.duration : 0
   const circumference = 2 * Math.PI * 140
-  const dashOffset = circumference * (1 - progress)
 
   // Phase label
   const phaseLabel =
@@ -125,17 +119,82 @@ export function Player({
     ? Math.min(1, Math.max(0, (progress - 0.3) / 0.4)) // 0 at 30%, 1 at 70%
     : 0
 
-  if (showCompletion) {
-    return (
-      <CompletionScreen
-        preset={preset}
-        duration={state.duration}
-        stats={stats}
-        onMoodSelect={onMoodSelect}
-        onDone={onStop}
-      />
-    )
-  }
+  // Scrub state
+  const [isScrubbing, setIsScrubbing] = useState(false)
+  const [scrubTime, setScrubTime] = useState(0)
+  const timelineRef = useRef<HTMLDivElement>(null)
+
+  const getTimeFromPosition = useCallback((clientX: number) => {
+    const el = timelineRef.current
+    if (!el) return 0
+    const rect = el.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    return ratio * state.duration
+  }, [state.duration])
+
+  const handleScrubStart = useCallback((clientX: number) => {
+    const time = getTimeFromPosition(clientX)
+    setIsScrubbing(true)
+    setScrubTime(time)
+    onSeek(time)
+  }, [getTimeFromPosition, onSeek])
+
+  const handleScrubMove = useCallback((clientX: number) => {
+    if (!isScrubbing) return
+    const time = getTimeFromPosition(clientX)
+    setScrubTime(time)
+    onSeek(time)
+  }, [isScrubbing, getTimeFromPosition, onSeek])
+
+  const handleScrubEnd = useCallback(() => {
+    setIsScrubbing(false)
+  }, [])
+
+  // Window-level listeners for drag outside the bar
+  useEffect(() => {
+    if (!isScrubbing) return
+
+    const onMouseMove = (e: MouseEvent) => handleScrubMove(e.clientX)
+    const onMouseUp = () => handleScrubEnd()
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches[0]) handleScrubMove(e.touches[0].clientX)
+    }
+    const onTouchEnd = () => handleScrubEnd()
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('touchmove', onTouchMove)
+    window.addEventListener('touchend', onTouchEnd)
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [isScrubbing, handleScrubMove, handleScrubEnd])
+
+  // Display time uses scrub values while dragging
+  const displayElapsed = isScrubbing ? scrubTime : state.elapsed
+  const displayProgress = state.duration > 0 ? displayElapsed / state.duration : 0
+
+  // Build SVG path for frequency envelope visualization
+  const envelopePath = (() => {
+    const env = preset.frequencyEnvelope
+    if (env.length < 2) return ''
+    const width = 300
+    const height = 24
+    const maxFreq = Math.max(...env.map(p => p.beatFreq))
+    const minFreq = Math.min(...env.map(p => p.beatFreq))
+    const freqRange = maxFreq - minFreq || 1
+
+    const points = env.map(p => {
+      const x = (p.time / state.duration) * width
+      const y = height - ((p.beatFreq - minFreq) / freqRange) * (height - 4) - 2
+      return `${x},${y}`
+    })
+    return `M${points.join(' L')}`
+  })()
 
   return (
     <div
@@ -188,8 +247,8 @@ export function Player({
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeDasharray={circumference}
-            strokeDashoffset={dashOffset}
-            style={{ transition: 'stroke-dashoffset 1s linear' }}
+            strokeDashoffset={circumference * (1 - displayProgress)}
+            style={{ transition: isScrubbing ? 'none' : 'stroke-dashoffset 1s linear' }}
           />
         </svg>
 
@@ -234,8 +293,54 @@ export function Player({
           className="font-mono text-lg text-slate-400 transition-opacity duration-500"
           style={{ opacity: controlsVisible ? 1 : 0.6, fontVariantNumeric: 'tabular-nums' }}
         >
-          {formatTime(state.elapsed)} / {formatTime(state.duration)}
+          {formatTime(displayElapsed)} / {formatTime(state.duration)}
         </p>
+      </div>
+
+      {/* Timeline scrubber */}
+      <div
+        className="mt-4 w-full max-w-xs px-6 transition-opacity duration-500"
+        style={{ opacity: controlsVisible ? 1 : 0.15 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          ref={timelineRef}
+          className="relative h-8 cursor-pointer select-none touch-none"
+          onMouseDown={(e) => { e.preventDefault(); handleScrubStart(e.clientX) }}
+          onTouchStart={(e) => { if (e.touches[0]) handleScrubStart(e.touches[0].clientX) }}
+        >
+          {/* Frequency envelope visualization */}
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 24" preserveAspectRatio="none">
+            {envelopePath && (
+              <>
+                {/* Dimmed unplayed portion */}
+                <path d={envelopePath} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                {/* Bright played portion */}
+                <clipPath id="played-clip">
+                  <rect x="0" y="0" width={displayProgress * 300} height="24" />
+                </clipPath>
+                <path d={envelopePath} fill="none" stroke={preset.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" clipPath="url(#played-clip)" />
+              </>
+            )}
+            {/* Track line if no envelope */}
+            {!envelopePath && (
+              <>
+                <line x1="0" y1="12" x2="300" y2="12" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
+                <line x1="0" y1="12" x2={displayProgress * 300} y2="12" stroke={preset.color} strokeWidth="2" />
+              </>
+            )}
+          </svg>
+
+          {/* Playhead line + handle */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 -translate-x-1/2"
+            style={{ left: `${displayProgress * 100}%`, background: 'white' }}
+          />
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white shadow-lg"
+            style={{ left: `${displayProgress * 100}%`, boxShadow: `0 0 8px ${preset.color}80` }}
+          />
+        </div>
       </div>
 
       {/* Controls */}
@@ -454,7 +559,7 @@ export function Player({
                 Continue
               </button>
               <button
-                onClick={onStop}
+                onClick={onEarlyStop}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-red-500/80 hover:bg-red-500 transition-colors"
               >
                 End

@@ -222,6 +222,39 @@ export class SessionManager {
     }
   }
 
+  /** Seek to a specific time in the session */
+  seek(targetTime: number): void {
+    if (!this.preset) return
+
+    // Clamp to [0, duration - 0.1] to avoid accidental completion
+    const clampedTime = Math.max(0, Math.min(targetTime, this.preset.duration - 0.1))
+
+    // Adjust pauseOffset so that elapsed calculation yields clampedTime
+    // elapsed = (now - startTime - pauseOffset) / 1000 = clampedTime
+    // pauseOffset = now - startTime - clampedTime * 1000
+    const now = this.pausedAt > 0 ? this.pausedAt : performance.now()
+    this.pauseOffset = now - this.startTime - clampedTime * 1000
+
+    this._elapsed = clampedTime
+
+    // Update phase
+    this.updatePhase()
+
+    // Set beat frequency instantly (no ramp, to support rapid scrubbing)
+    const targetFreq = Math.max(this.interpolateFrequency(clampedTime), 0.1)
+    this.engine.setBeatFrequency(targetFreq)
+    if (this._isochronicEnabled) {
+      this.isochronic.setBeatFrequency(targetFreq)
+    }
+
+    // Fire callback immediately
+    this.callback?.({
+      phase: this._phase,
+      elapsed: clampedTime,
+      beatFreq: targetFreq,
+    })
+  }
+
   setAmbientVolume(v: number): void {
     this.ambientVolume = v
     if (this.pausedAt > 0) return

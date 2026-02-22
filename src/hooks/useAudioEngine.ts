@@ -144,6 +144,20 @@ export function useAudioEngine() {
     setState((prev) => ({ ...prev, breathingGuideEnabled: !prev.breathingGuideEnabled }))
   }, [])
 
+  const seek = useCallback(
+    (targetTime: number) => {
+      const manager = getManager()
+      manager.seek(targetTime)
+      setState((prev) => ({
+        ...prev,
+        elapsed: targetTime,
+        beatFreq: manager.currentBeatFreq,
+        phase: manager.phase,
+      }))
+    },
+    [getManager],
+  )
+
   const setAmbientVolume = useCallback(
     (v: number) => {
       getManager().setAmbientVolume(v)
@@ -179,6 +193,7 @@ export function useAudioEngine() {
     pause,
     resume,
     stop,
+    seek,
     setVolume,
     toggleIsochronic,
     toggleBreathingGuide,

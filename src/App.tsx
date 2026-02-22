@@ -8,6 +8,7 @@ import { Onboarding } from './components/Onboarding'
 import { PresetList } from './components/PresetList'
 import { SessionSetup } from './components/SessionSetup'
 import { Player } from './components/Player'
+import { CompletionScreen } from './components/CompletionScreen'
 import { JourneyDetail } from './components/JourneyDetail'
 
 type View = 'discover' | 'setup' | 'countdown' | 'session'
@@ -31,6 +32,9 @@ function App() {
   const [lastCompletedSessionId, setLastCompletedSessionId] = useState<string | null>(null)
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null)
   const [activeJourneyDay, setActiveJourneyDay] = useState<{ journeyId: string; day: number } | null>(null)
+  const [completionPreset, setCompletionPreset] = useState<SessionPreset | null>(null)
+  const [earlyExitDuration, setEarlyExitDuration] = useState(0)
+  const [completedFull, setCompletedFull] = useState(true)
 
   // Clean up countdown interval on unmount
   useEffect(() => {
@@ -90,12 +94,38 @@ function App() {
     [audio, wakeLock],
   )
 
-  const handleStopSession = useCallback(() => {
+  const handleDismissSession = useCallback(() => {
     audio.stop()
     wakeLock.release()
     setSelectedPreset(null)
+    setCompletionPreset(null)
     setView('discover')
   }, [audio, wakeLock])
+
+  const handleEarlyStop = useCallback(() => {
+    const preset = audio.state.activePreset
+    if (!preset) return
+
+    const elapsed = audio.state.elapsed
+    setCompletionPreset(preset)
+    setEarlyExitDuration(elapsed)
+    setCompletedFull(false)
+
+    // Save partial session to history
+    wakeLock.release()
+    const session = history.addSession({
+      presetId: preset.id,
+      presetName: preset.name,
+      category: preset.category,
+      durationSeconds: Math.round(elapsed),
+      completedAt: new Date().toISOString(),
+      completedFull: false,
+    })
+    setLastCompletedSessionId(session.id)
+
+    audio.stop()
+    setView('discover')
+  }, [audio, wakeLock, history])
 
   // MediaSession API for lock screen controls + silent audio keepalive
   useMediaSession({
@@ -106,12 +136,17 @@ function App() {
     duration: audio.state.duration,
     onPause: audio.pause,
     onResume: audio.resume,
-    onStop: handleStopSession,
+    onStop: handleEarlyStop,
+    onSeek: audio.seek,
   })
 
   const handleSessionComplete = useCallback(() => {
     wakeLock.release()
     if (audio.state.activePreset) {
+      setCompletionPreset(audio.state.activePreset)
+      setEarlyExitDuration(audio.state.duration)
+      setCompletedFull(true)
+
       const session = history.addSession({
         presetId: audio.state.activePreset.id,
         presetName: audio.state.activePreset.name,
@@ -176,21 +211,34 @@ function App() {
     )
   }
 
+  // Show CompletionScreen from App level (so it persists after audio stops)
+  if (completionPreset) {
+    return (
+      <CompletionScreen
+        preset={completionPreset}
+        duration={earlyExitDuration}
+        stats={history.stats}
+        completedFull={completedFull}
+        onMoodSelect={handleMoodSelect}
+        onDone={handleDismissSession}
+      />
+    )
+  }
+
   if (view === 'session' && audio.state.activePreset) {
     return (
       <Player
         state={audio.state}
         onPause={audio.pause}
         onResume={audio.resume}
-        onStop={handleStopSession}
+        onEarlyStop={handleEarlyStop}
+        onSeek={audio.seek}
         onVolumeChange={audio.setVolume}
         onToggleIsochronic={audio.toggleIsochronic}
         onToggleBreathingGuide={audio.toggleBreathingGuide}
         onAmbientVolumeChange={audio.setAmbientVolume}
         onAmbientSoundChange={audio.setAmbientSound}
         onComplete={handleSessionComplete}
-        onMoodSelect={handleMoodSelect}
-        stats={history.stats}
         hapticEnabled={history.preferences.hapticEnabled}
         getAnalyser={audio.getAnalyser}
       />

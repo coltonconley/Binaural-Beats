@@ -6,6 +6,7 @@ interface Props {
   preset: SessionPreset
   duration: number
   stats: UserStats
+  completedFull?: boolean
   onMoodSelect: (mood: MoodRating) => void
   onDone: () => void
 }
@@ -23,7 +24,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function CompletionScreen({ preset, duration, stats, onMoodSelect, onDone }: Props) {
+export function CompletionScreen({ preset, duration, stats, completedFull = true, onMoodSelect, onDone }: Props) {
   const [selectedMood, setSelectedMood] = useState<MoodRating | null>(null)
 
   const minBeatFreq = preset.frequencyEnvelope.length > 0
@@ -57,7 +58,7 @@ export function CompletionScreen({ preset, duration, stats, onMoodSelect, onDone
           </svg>
         </div>
 
-        <p className="text-xs uppercase tracking-widest text-slate-500 mb-2">Session Complete</p>
+        <p className="text-xs uppercase tracking-widest text-slate-500 mb-2">{completedFull ? 'Session Complete' : 'Session Ended'}</p>
         <h2 className="text-2xl font-light text-slate-100 mb-1">{preset.name}</h2>
         <p className="text-sm text-slate-400 mb-8">
           {formatTime(duration)} · {bandInfo[preset.targetBand].label}{' '}
