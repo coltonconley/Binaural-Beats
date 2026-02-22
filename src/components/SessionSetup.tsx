@@ -4,6 +4,7 @@ import { bandInfo } from '../presets'
 import { FrequencySparkline } from './FrequencySparkline'
 import { usePreviewTone } from '../hooks/usePreviewTone'
 import { ambientSounds } from '../audio/ambientSounds'
+import { scoreVoice } from '../audio/VoiceCueEngine'
 
 function formatPhaseTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -39,12 +40,13 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [selectedVoiceName, setSelectedVoiceName] = useState('')
 
-  // Load available voices
+  // Load available voices, sorted by quality (best first)
   useEffect(() => {
     if (!isGuided || typeof speechSynthesis === 'undefined') return
 
     const loadVoices = () => {
       const available = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'))
+      available.sort((a, b) => scoreVoice(b) - scoreVoice(a))
       setVoices(available)
       if (available.length > 0 && !selectedVoiceName) {
         setSelectedVoiceName(available[0].name)
@@ -63,6 +65,7 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
     const voice = voices.find(v => v.name === selectedVoiceName)
     if (voice) utterance.voice = voice
     utterance.rate = voiceRate / 100
+    utterance.pitch = 0.92
     utterance.volume = 0.7
     speechSynthesis.speak(utterance)
   }, [voices, selectedVoiceName, voiceRate])
@@ -312,7 +315,9 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 outline-none focus:border-white/20"
                     >
                       {voices.map((v) => (
-                        <option key={v.name} value={v.name}>{v.name}</option>
+                        <option key={v.name} value={v.name}>
+                          {scoreVoice(v) >= 80 ? '★ ' : ''}{v.name}
+                        </option>
                       ))}
                     </select>
                   </div>

@@ -1,12 +1,37 @@
 import type { VoiceCue } from '../types'
 
+// Keywords that indicate premium neural/cloud-based voices
+const PREMIUM_KEYWORDS = ['google', 'neural', 'online', 'premium', 'enhanced', 'natural']
+
+// Well-known soothing system voices on macOS/iOS (decent quality)
 const SOOTHING_VOICES = ['samantha', 'karen', 'daniel', 'moira', 'fiona', 'alex', 'victoria']
+
+/** Score a voice by estimated quality — higher is better. Exported for UI voice pickers. */
+export function scoreVoice(voice: SpeechSynthesisVoice): number {
+  const name = voice.name.toLowerCase()
+
+  // Premium cloud/neural voices (Google, Microsoft Neural, Apple Enhanced) — best quality
+  for (const kw of PREMIUM_KEYWORDS) {
+    if (name.includes(kw)) return 100
+  }
+
+  // Remote/cloud voices (localService === false) tend to be higher quality
+  if (!voice.localService) return 80
+
+  // Well-known macOS soothing voices
+  for (const s of SOOTHING_VOICES) {
+    if (name.includes(s)) return 70
+  }
+
+  return 50
+}
 
 export class VoiceCueEngine {
   private cues: VoiceCue[] = []
   private nextCueIndex = 0
   private voice: SpeechSynthesisVoice | null = null
   private rate = 0.85
+  private pitch = 0.92
   private volume = 0.71
   private enabled = true
   private voicesLoaded = false
@@ -22,6 +47,7 @@ export class VoiceCueEngine {
     options?: {
       preferredVoiceName?: string
       rate?: number
+      pitch?: number
       volume?: number
       enabled?: boolean
     },
@@ -29,6 +55,7 @@ export class VoiceCueEngine {
     this.cues = [...cues].sort((a, b) => a.time - b.time)
     this.nextCueIndex = 0
     this.rate = options?.rate ?? 0.85
+    this.pitch = options?.pitch ?? 0.92
     this.volume = options?.volume ?? 0.71
     this.enabled = options?.enabled ?? true
     this.preferredVoiceName = options?.preferredVoiceName ?? null
@@ -37,6 +64,9 @@ export class VoiceCueEngine {
 
     // Try to select voice immediately
     this.selectVoice()
+
+    // Warm up the TTS engine with a silent utterance (avoids quality drop on first real cue)
+    this.warmUp()
 
     // Handle async voice loading
     if (!this.voicesLoaded) {
@@ -48,12 +78,13 @@ export class VoiceCueEngine {
     }
   }
 
-  tick(elapsed: number): { shouldChime: boolean } {
+  tick(elapsed: number): { shouldChime: boolean; cueText?: string } {
     if (this.nextCueIndex >= this.cues.length) {
       return { shouldChime: false }
     }
 
     let shouldChime = false
+    let cueText: string | undefined
 
     while (this.nextCueIndex < this.cues.length && this.cues[this.nextCueIndex].time <= elapsed) {
       const cue = this.cues[this.nextCueIndex]
@@ -63,12 +94,27 @@ export class VoiceCueEngine {
         shouldChime = true
       }
 
-      if (!cue.chimeOnly && cue.text && this.enabled) {
-        this.speak(cue.text)
+      if (!cue.chimeOnly && cue.text) {
+        cueText = cue.text
+        if (this.enabled) {
+          this.speak(cue.text)
+        }
       }
     }
 
-    return { shouldChime }
+    return { shouldChime, cueText }
+  }
+
+  /** Get the most recent cue text at or before the given time (for seek/display) */
+  getTextAtTime(time: number): string | undefined {
+    let text: string | undefined
+    for (const cue of this.cues) {
+      if (cue.time > time) break
+      if (!cue.chimeOnly && cue.text) {
+        text = cue.text
+      }
+    }
+    return text
   }
 
   pause(): void {
@@ -133,7 +179,7 @@ export class VoiceCueEngine {
     const utterance = new SpeechSynthesisUtterance(text)
     if (this.voice) utterance.voice = this.voice
     utterance.rate = this.rate
-    utterance.pitch = 1.0
+    utterance.pitch = this.pitch
     utterance.volume = this.volume
     utterance.lang = 'en-US'
 
@@ -142,6 +188,15 @@ export class VoiceCueEngine {
 
     try {
       speechSynthesis.speak(utterance)
+    } catch { /* */ }
+  }
+
+  private warmUp(): void {
+    if (!this.isAvailable || !this.enabled) return
+    try {
+      const u = new SpeechSynthesisUtterance('')
+      u.volume = 0
+      speechSynthesis.speak(u)
     } catch { /* */ }
   }
 
@@ -163,21 +218,15 @@ export class VoiceCueEngine {
         }
       }
 
-      // Try soothing voices first
+      // Score and rank all English voices by quality, pick the best
       const englishVoices = voices.filter(v => v.lang.startsWith('en'))
-      for (const name of SOOTHING_VOICES) {
-        const match = englishVoices.find(v => v.name.toLowerCase().includes(name))
-        if (match) {
-          this.voice = match
-          return
-        }
+      if (englishVoices.length === 0) {
+        this.voice = voices[0]
+        return
       }
 
-      // Fall back to first en-US or en-GB voice
-      const fallback = voices.find(v => v.lang === 'en-US' || v.lang === 'en-GB')
-        ?? englishVoices[0]
-        ?? voices[0]
-      this.voice = fallback
+      englishVoices.sort((a, b) => scoreVoice(b) - scoreVoice(a))
+      this.voice = englishVoices[0]
     } catch { /* */ }
   }
 }
