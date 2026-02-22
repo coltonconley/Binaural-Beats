@@ -240,6 +240,7 @@ export class SessionManager {
     this.ambient.fadeVolume(0, durationSec)
     if (this._isochronicEnabled) this.isochronic.setVolume(0)
     if (this.isGuidedSession) {
+      this.voiceCues.stop()
       this.phasedNoise.fadeVolume(0, durationSec)
       if (this.resonantToneActive) {
         this.resonantTone.fadeVolume(0, durationSec)

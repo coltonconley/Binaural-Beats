@@ -49,7 +49,7 @@ export class VoiceCueEngine {
   }
 
   tick(elapsed: number): { shouldChime: boolean } {
-    if (!this.enabled || !this.isAvailable || this.nextCueIndex >= this.cues.length) {
+    if (this.nextCueIndex >= this.cues.length) {
       return { shouldChime: false }
     }
 
@@ -63,7 +63,7 @@ export class VoiceCueEngine {
         shouldChime = true
       }
 
-      if (!cue.chimeOnly && cue.text) {
+      if (!cue.chimeOnly && cue.text && this.enabled) {
         this.speak(cue.text)
       }
     }
@@ -86,12 +86,13 @@ export class VoiceCueEngine {
   }
 
   seek(time: number): void {
-    if (!this.isAvailable) return
-
     // Cancel any in-progress speech
-    try {
-      speechSynthesis.cancel()
-    } catch { /* */ }
+    if (this.isAvailable) {
+      try {
+        speechSynthesis.cancel()
+      } catch { /* */ }
+    }
+
     // Binary search for the next cue at or after `time`
     let lo = 0
     let hi = this.cues.length
