@@ -2,7 +2,7 @@ export type BrainwaveBand = 'delta' | 'theta' | 'alpha' | 'beta' | 'gamma'
 
 export type NoiseType = 'pink' | 'brown' | 'none'
 
-export type AmbientSoundType = 'rain' | 'ocean' | 'forest' | 'fire' | 'wind' | 'stream' | 'none'
+export type AmbientSoundType = 'rain' | 'ocean' | 'forest' | 'fire' | 'wind' | 'stream' | 'rain-tin-roof' | 'rain-on-leaves' | 'none'
 
 export type SessionPhase = 'idle' | 'induction' | 'main' | 'return' | 'complete'
 

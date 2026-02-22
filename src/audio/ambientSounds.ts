@@ -51,4 +51,18 @@ export const ambientSounds: AmbientSoundMeta[] = [
     filename: 'stream.wav',
     description: 'Babbling brook',
   },
+  {
+    id: 'rain-tin-roof',
+    label: 'Tin Roof',
+    icon: '🏠',
+    filename: 'rain-tin-roof.wav',
+    description: 'Rain on a tin roof',
+  },
+  {
+    id: 'rain-on-leaves',
+    label: 'Leaves',
+    icon: '🍃',
+    filename: 'rain-on-leaves.wav',
+    description: 'Rain pattering on leaves',
+  },
 ]
