@@ -8,6 +8,8 @@ interface OscillatorPair {
   leftPan: StereoPannerNode
   rightPan: StereoPannerNode
   carrierFreq: number
+  /** If set, the right oscillator stays at (carrierFreq + fixedBeatFreq) — ignores envelope ramps */
+  fixedBeatFreq?: number
 }
 
 export class BinauralEngine {
@@ -99,7 +101,8 @@ export class BinauralEngine {
 
     const right = ctx.createOscillator()
     right.type = 'sine'
-    right.frequency.value = layer.carrierFreq + beatFreq
+    // fixedBeatFreq: right ear stays at this offset regardless of envelope changes
+    right.frequency.value = layer.carrierFreq + (layer.fixedBeatFreq ?? beatFreq)
 
     // 0.3 amplitude per oscillator for headroom with multi-layer stacking
     const linearGain = Math.pow(10, layer.gainDb / 20) * 0.3
@@ -128,7 +131,7 @@ export class BinauralEngine {
     left.start()
     right.start()
 
-    return { left, right, leftGain, rightGain, leftPan, rightPan, carrierFreq: layer.carrierFreq }
+    return { left, right, leftGain, rightGain, leftPan, rightPan, carrierFreq: layer.carrierFreq, fixedBeatFreq: layer.fixedBeatFreq }
   }
 
   rampBeatFrequency(newBeatFreq: number, durationSec: number): void {
@@ -136,6 +139,8 @@ export class BinauralEngine {
 
     const now = this.ctx.currentTime
     for (const pair of this.pairs) {
+      // Fixed-beat pairs (e.g. 40 Hz Gamma overlay) are immune to envelope ramps
+      if (pair.fixedBeatFreq !== undefined) continue
       const targetFreq = pair.carrierFreq + newBeatFreq
       pair.right.frequency.cancelScheduledValues(now)
       pair.right.frequency.setValueAtTime(pair.right.frequency.value, now)
@@ -156,9 +161,29 @@ export class BinauralEngine {
   setBeatFrequency(beatFreq: number): void {
     if (!this.ctx || !this._isRunning) return
     for (const pair of this.pairs) {
+      // Fixed-beat pairs are immune to envelope changes
+      if (pair.fixedBeatFreq !== undefined) continue
       pair.right.frequency.value = pair.carrierFreq + beatFreq
     }
     this._currentBeatFreq = beatFreq
+  }
+
+  /**
+   * Fades an individual carrier layer's gain in or out.
+   * Used by SessionManager to activate/deactivate the 40 Hz Gamma overlay.
+   * `targetGain` is a 0–1 linear scale (internally scaled by the 0.3 headroom factor).
+   */
+  setCarrierGain(layerIndex: number, targetGain: number, rampSec: number): void {
+    if (!this.ctx || layerIndex >= this.pairs.length) return
+    const pair = this.pairs[layerIndex]
+    const now = this.ctx.currentTime
+    const scaledGain = targetGain * 0.3
+
+    for (const gainNode of [pair.leftGain, pair.rightGain]) {
+      gainNode.gain.cancelScheduledValues(now)
+      gainNode.gain.setValueAtTime(gainNode.gain.value, now)
+      gainNode.gain.linearRampToValueAtTime(scaledGain, now + rampSec)
+    }
   }
 
   setVolume(volume: number): void {

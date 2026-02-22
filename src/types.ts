@@ -20,6 +20,12 @@ export interface CarrierLayer {
   carrierFreq: number
   /** Relative volume in dB (0 = primary, negative = quieter) */
   gainDb: number
+  /**
+   * If set, the right-ear oscillator is fixed at (carrierFreq + fixedBeatFreq) Hz
+   * and does NOT follow the frequency envelope. Used for the ASGEP 40 Hz Gamma
+   * overlay that runs simultaneously with deep Delta entrainment.
+   */
+  fixedBeatFreq?: number
 }
 
 export interface SessionPreset {
@@ -75,12 +81,63 @@ export interface ResonantTuningConfig {
   gainDb?: number
 }
 
+// ── ASGEP / Advanced Session Feature Types ──────────────
+
+/** A time window during which the SAM engine runs at a given rotation speed. */
+export interface SAMWindow {
+  startTime: number
+  endTime: number
+  /** Rotation Hz = target brainwave frequency (e.g. 40 for Gamma, 4 for Theta) */
+  rotationHz: number
+  /** Smooth circular orbit or erratic discontinuous jumps */
+  mode: 'smooth' | 'erratic'
+  /** SAM carrier frequency in Hz (default 303) */
+  carrierFreq?: number
+}
+
+/** Schedules a carrier layer (by index) to fade in/out at a specific time. */
+export interface CarrierGainEvent {
+  time: number
+  /** Index into SessionPreset.carriers[] */
+  carrierIndex: number
+  targetGain: number    // 0–1 linear scale
+  durationSec: number
+}
+
+/** Schedules an ambient volume change at a specific timestamp. */
+export interface AmbientFadeEvent {
+  time: number
+  targetVolume: number
+  durationSec: number
+}
+
+/** Configuration for the optional noise low-pass filter and breathing LFO. */
+export interface NoiseFilterConfig {
+  /** Apply a biquad low-pass filter at this frequency (Hz). ASGEP uses 200 Hz. */
+  lowPassFreq?: number
+  /**
+   * Apply a 0.2 Hz amplitude LFO (12 cycles/min) to the noise output.
+   * Subliminally entrains breathing rate to 12 breaths/min.
+   */
+  breathingLFO?: boolean
+}
+
 export interface GuidanceScript {
   voiceCues: VoiceCue[]
   phases: GuidancePhase[]
   resonantTuning?: ResonantTuningConfig
   phasedNoise?: boolean
   voiceVolume?: number
+  /** SAM (Spatial Angle Modulation) windows — time ranges with rotation parameters */
+  samWindows?: SAMWindow[]
+  /** Carrier gain events — fade specific carrier layers in/out at timestamps */
+  carrierGainEvents?: CarrierGainEvent[]
+  /** Ambient volume automation events (e.g. silence drop at Focus 15 entry) */
+  ambientEvents?: AmbientFadeEvent[]
+  /** Timestamp (seconds) to fire the rocket-pan transition FX */
+  rocketPanTime?: number
+  /** Optional noise filter config for ASGEP-style masking layer */
+  noiseFilter?: NoiseFilterConfig
 }
 
 // ── Session Options ──────────────────────────────────────

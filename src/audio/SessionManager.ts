@@ -7,6 +7,7 @@ import { VoiceCueEngine } from './VoiceCueEngine'
 import { ChimeEngine } from './ChimeEngine'
 import { PhasedNoiseEngine } from './PhasedNoiseEngine'
 import { ResonantToneEngine } from './ResonantToneEngine'
+import { SAMEngine } from './SAMEngine'
 
 export type SessionCallback = (state: {
   phase: SessionPhase
@@ -25,6 +26,7 @@ export class SessionManager {
   private chime = new ChimeEngine()
   private phasedNoise = new PhasedNoiseEngine()
   private resonantTone = new ResonantToneEngine()
+  private sam = new SAMEngine()
   private preset: SessionPreset | null = null
   private startTime = 0
   private pausedAt = 0
@@ -42,6 +44,11 @@ export class SessionManager {
   private guidanceScript: GuidanceScript | null = null
   private isGuidedSession = false
   private resonantToneActive = false
+  // ASGEP feature tracking
+  private activeSAMWindowIndex = -1
+  private firedCarrierGainEvents = new Set<number>()
+  private firedAmbientEvents = new Set<number>()
+  private rocketPanFired = false
 
   get phase(): SessionPhase {
     return this._phase
@@ -100,6 +107,10 @@ export class SessionManager {
       this.guidanceScript = preset.guidanceScript ?? null
       this.isGuidedSession = !!this.guidanceScript
       this.resonantToneActive = false
+      this.activeSAMWindowIndex = -1
+      this.firedCarrierGainEvents = new Set<number>()
+      this.firedAmbientEvents = new Set<number>()
+      this.rocketPanFired = false
 
       const initialBeatFreq = preset.frequencyEnvelope[0].beatFreq
 
@@ -128,7 +139,8 @@ export class SessionManager {
           preset.noiseVolume * volume,
         )
       } else if (preset.noiseType !== 'none') {
-        this.noise.start(this.ctx, this.ctx.destination, preset.noiseType, 0)
+        const noiseFilter = this.guidanceScript?.noiseFilter
+        this.noise.start(this.ctx, this.ctx.destination, preset.noiseType, 0, noiseFilter)
         this.noise.fadeVolume(preset.noiseVolume * volume, 2)
       }
 
@@ -195,6 +207,7 @@ export class SessionManager {
       if (this.resonantToneActive) {
         this.resonantTone.fadeVolume(0, 0.3)
       }
+      if (this.sam.isRunning) this.sam.fadeVolume(0, 0.3)
     }
   }
 
@@ -228,6 +241,7 @@ export class SessionManager {
         const linearGain = Math.pow(10, gainDb / 20)
         this.resonantTone.fadeVolume(linearGain, 0.3)
       }
+      if (this.sam.isRunning) this.sam.fadeVolume(this.volume, 0.3)
     }
 
     this.startTickLoop()
@@ -245,6 +259,7 @@ export class SessionManager {
       if (this.resonantToneActive) {
         this.resonantTone.fadeVolume(0, durationSec)
       }
+      if (this.sam.isRunning) this.sam.fadeVolume(0, durationSec)
     }
   }
 
@@ -259,6 +274,7 @@ export class SessionManager {
     this.chime.stop()
     this.phasedNoise.stop()
     this.resonantTone.stop()
+    this.sam.stop()
     if (this.ctx && this.ctx.state !== 'closed') {
       this.ctx.close()
     }
@@ -275,6 +291,10 @@ export class SessionManager {
     this.guidanceScript = null
     this.isGuidedSession = false
     this.resonantToneActive = false
+    this.activeSAMWindowIndex = -1
+    this.firedCarrierGainEvents = new Set<number>()
+    this.firedAmbientEvents = new Set<number>()
+    this.rocketPanFired = false
   }
 
   setVolume(v: number): void {
@@ -459,6 +479,12 @@ export class SessionManager {
           this.phasedNoise.setPanRate(targetFreq)
         }
 
+        // ASGEP feature updates
+        this.updateSAM(this._elapsed)
+        this.updateCarrierGainEvents(this._elapsed)
+        this.updateAmbientEvents(this._elapsed)
+        this.checkRocketPan(this._elapsed)
+
         // Get current guidance phase name
         guidancePhaseName = this.getCurrentGuidancePhaseName(this._elapsed)
       }
@@ -589,6 +615,91 @@ export class SessionManager {
     } else if (!inWindow && this.resonantToneActive) {
       this.resonantTone.stop()
       this.resonantToneActive = false
+    }
+  }
+
+  // ── ASGEP feature helpers ─────────────────────────────
+
+  /** Manages SAM engine activation/deactivation based on samWindows in the guidance script */
+  private updateSAM(elapsed: number): void {
+    if (!this.guidanceScript?.samWindows || !this.ctx) return
+
+    const windows = this.guidanceScript.samWindows
+    let activeIdx = -1
+
+    for (let i = 0; i < windows.length; i++) {
+      if (elapsed >= windows[i].startTime && elapsed < windows[i].endTime) {
+        activeIdx = i
+        break
+      }
+    }
+
+    if (activeIdx === this.activeSAMWindowIndex) {
+      // Already in correct state — just update mode if it changed
+      if (activeIdx >= 0) {
+        const win = windows[activeIdx]
+        this.sam.setRotationHz(win.rotationHz)
+        this.sam.setMode(win.mode)
+      }
+      return
+    }
+
+    // Window changed — stop old SAM if running, start new if entering a window
+    if (this.sam.isRunning) {
+      this.sam.fadeVolume(0, 2)
+      setTimeout(() => { if (!this.sam.isRunning) return; this.sam.stop() }, 2100)
+    }
+
+    if (activeIdx >= 0) {
+      const win = windows[activeIdx]
+      this.sam.start(
+        this.ctx,
+        this.ctx.destination,
+        win.rotationHz,
+        win.mode,
+        this.volume,
+        win.carrierFreq ?? 303,
+      )
+    }
+
+    this.activeSAMWindowIndex = activeIdx
+  }
+
+  /** Fires one-shot carrier gain events (e.g. fading in the 40 Hz Gamma overlay) */
+  private updateCarrierGainEvents(elapsed: number): void {
+    if (!this.guidanceScript?.carrierGainEvents) return
+
+    const events = this.guidanceScript.carrierGainEvents
+    for (let i = 0; i < events.length; i++) {
+      if (!this.firedCarrierGainEvents.has(i) && elapsed >= events[i].time) {
+        const evt = events[i]
+        this.engine.setCarrierGain(evt.carrierIndex, evt.targetGain, evt.durationSec)
+        this.firedCarrierGainEvents.add(i)
+      }
+    }
+  }
+
+  /** Fires one-shot ambient fade events (e.g. void silence drop at Focus 15 entry) */
+  private updateAmbientEvents(elapsed: number): void {
+    if (!this.guidanceScript?.ambientEvents) return
+
+    const events = this.guidanceScript.ambientEvents
+    for (let i = 0; i < events.length; i++) {
+      if (!this.firedAmbientEvents.has(i) && elapsed >= events[i].time) {
+        const evt = events[i]
+        this.ambient.fadeVolume(evt.targetVolume, evt.durationSec)
+        this.ambientVolume = evt.targetVolume
+        this.firedAmbientEvents.add(i)
+      }
+    }
+  }
+
+  /** Fires the one-shot rocket-pan transition FX at the specified timestamp */
+  private checkRocketPan(elapsed: number): void {
+    if (this.rocketPanFired || !this.guidanceScript?.rocketPanTime) return
+    if (elapsed >= this.guidanceScript.rocketPanTime) {
+      this.chime.playRocketPan()
+      this.rocketPanFired = true
     }
   }
 }

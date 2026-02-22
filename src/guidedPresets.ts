@@ -1,6 +1,9 @@
 import type { SessionPreset } from './types'
+import { asgepMasterTrack } from './audio/tracks/asgepMasterTrack'
 
 export const guidedPresets: SessionPreset[] = [
+  asgepMasterTrack,
+
   // ── Track 1: Foundation (38 min) ─────────────────────────
   {
     id: 'guided-foundation',

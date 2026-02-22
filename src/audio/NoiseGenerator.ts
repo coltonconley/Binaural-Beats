@@ -1,15 +1,25 @@
-import type { NoiseType } from '../types'
+import type { NoiseType, NoiseFilterConfig } from '../types'
 
 export class NoiseGenerator {
   private source: AudioBufferSourceNode | null = null
   private gainNode: GainNode | null = null
+  private lpFilter: BiquadFilterNode | null = null
+  private breathingGain: GainNode | null = null
+  private breathingLFO: OscillatorNode | null = null
+  private breathingLFOGain: GainNode | null = null
   private ctx: AudioContext | null = null
 
   get isRunning(): boolean {
     return this.source !== null
   }
 
-  start(ctx: AudioContext, destination: AudioNode, type: NoiseType, volume: number): void {
+  start(
+    ctx: AudioContext,
+    destination: AudioNode,
+    type: NoiseType,
+    volume: number,
+    filterConfig?: NoiseFilterConfig,
+  ): void {
     if (type === 'none') return
     this.ctx = ctx
 
@@ -33,8 +43,41 @@ export class NoiseGenerator {
     this.gainNode = ctx.createGain()
     this.gainNode.gain.value = volume
 
+    // Build the signal chain: source → gainNode → [lpFilter?] → [breathingGain?] → destination
+    let chainEnd: AudioNode = this.gainNode
+
+    if (filterConfig?.lowPassFreq) {
+      this.lpFilter = ctx.createBiquadFilter()
+      this.lpFilter.type = 'lowpass'
+      this.lpFilter.frequency.value = filterConfig.lowPassFreq
+      this.lpFilter.Q.value = 0.7 // Butterworth-like response
+      chainEnd.connect(this.lpFilter)
+      chainEnd = this.lpFilter
+    }
+
+    if (filterConfig?.breathingLFO) {
+      // Breathing pacing: 0.2 Hz amplitude modulation (12 cycles/min)
+      // breathingGain holds DC offset at 0.88; LFO adds ±0.12 → range [0.76, 1.0]
+      this.breathingGain = ctx.createGain()
+      this.breathingGain.gain.value = 0.88
+
+      this.breathingLFO = ctx.createOscillator()
+      this.breathingLFO.type = 'sine'
+      this.breathingLFO.frequency.value = 0.2 // 12 cycles/min
+
+      this.breathingLFOGain = ctx.createGain()
+      this.breathingLFOGain.gain.value = 0.12 // ±12% amplitude swing
+
+      this.breathingLFO.connect(this.breathingLFOGain)
+      this.breathingLFOGain.connect(this.breathingGain.gain)
+      this.breathingLFO.start()
+
+      chainEnd.connect(this.breathingGain)
+      chainEnd = this.breathingGain
+    }
+
     this.source.connect(this.gainNode)
-    this.gainNode.connect(destination)
+    chainEnd.connect(destination)
     this.source.start()
   }
 
@@ -59,11 +102,20 @@ export class NoiseGenerator {
       this.source?.stop()
       this.source?.disconnect()
     } catch { /* */ }
+    try { this.gainNode?.disconnect() } catch { /* */ }
+    try { this.lpFilter?.disconnect() } catch { /* */ }
+    try { this.breathingGain?.disconnect() } catch { /* */ }
     try {
-      this.gainNode?.disconnect()
+      this.breathingLFO?.stop()
+      this.breathingLFO?.disconnect()
     } catch { /* */ }
+    try { this.breathingLFOGain?.disconnect() } catch { /* */ }
     this.source = null
     this.gainNode = null
+    this.lpFilter = null
+    this.breathingGain = null
+    this.breathingLFO = null
+    this.breathingLFOGain = null
     this.ctx = null
   }
 
