@@ -15,6 +15,7 @@ export interface AudioEngineState {
   breathingGuideEnabled: boolean
   ambientSound: AmbientSoundType
   ambientVolume: number
+  guidancePhaseName?: string
 }
 
 const initialState: AudioEngineState = {
@@ -54,6 +55,9 @@ export function useAudioEngine() {
         volume?: number
         ambientSound?: AmbientSoundType
         ambientVolume?: number
+        voiceEnabled?: boolean
+        preferredVoiceName?: string
+        voiceRate?: number
       },
     ) => {
       const manager = getManager()
@@ -69,7 +73,7 @@ export function useAudioEngine() {
         preset,
         volumeRef.current,
         isoEnabled,
-        ({ phase, elapsed, beatFreq }) => {
+        ({ phase, elapsed, beatFreq, guidancePhaseName }) => {
           setState((prev) => ({
             ...prev,
             isPlaying: phase !== 'complete',
@@ -77,10 +81,16 @@ export function useAudioEngine() {
             phase,
             elapsed,
             beatFreq,
+            guidancePhaseName,
           }))
         },
         ambSound,
         ambVol,
+        {
+          voiceEnabled: options?.voiceEnabled,
+          preferredVoiceName: options?.preferredVoiceName,
+          voiceRate: options?.voiceRate,
+        },
       )
 
       setState((prev) => ({

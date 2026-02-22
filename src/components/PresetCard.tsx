@@ -71,6 +71,11 @@ export function PresetCard({ preset, onSelect, isFavorite, onToggleFavorite }: P
           >
             {band.label} {minFreq.toFixed(0)} Hz
           </span>
+          {preset.guidanceScript && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-purple-500/20 text-purple-300">
+              Guided
+            </span>
+          )}
         </div>
       </div>
     </button>

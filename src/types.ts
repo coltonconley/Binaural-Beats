@@ -6,7 +6,7 @@ export type AmbientSoundType = 'rain' | 'ocean' | 'forest' | 'fire' | 'wind' | '
 
 export type SessionPhase = 'idle' | 'induction' | 'main' | 'return' | 'complete'
 
-export type PresetCategory = 'meditation' | 'focus' | 'sleep' | 'relaxation' | 'advanced' | 'custom'
+export type PresetCategory = 'meditation' | 'focus' | 'sleep' | 'relaxation' | 'advanced' | 'guided' | 'custom'
 
 export interface FrequencyPoint {
   /** Time offset in seconds from session start */
@@ -48,7 +48,42 @@ export interface SessionPreset {
   ambientSound: AmbientSoundType
   /** Default ambient volume (0-1) */
   ambientVolume: number
+  /** Guidance script for guided sessions */
+  guidanceScript?: GuidanceScript
 }
+
+// ── Guided Session Types ─────────────────────────────────
+
+export interface VoiceCue {
+  time: number
+  text: string
+  pauseAfter?: number
+  chime?: boolean
+  chimeOnly?: boolean
+}
+
+export interface GuidancePhase {
+  name: string
+  startTime: number
+  endTime: number
+}
+
+export interface ResonantTuningConfig {
+  startTime: number
+  endTime: number
+  frequency?: number
+  gainDb?: number
+}
+
+export interface GuidanceScript {
+  voiceCues: VoiceCue[]
+  phases: GuidancePhase[]
+  resonantTuning?: ResonantTuningConfig
+  phasedNoise?: boolean
+  voiceVolume?: number
+}
+
+// ── Session Options ──────────────────────────────────────
 
 export interface SessionOptions {
   isochronicEnabled?: boolean
@@ -56,6 +91,9 @@ export interface SessionOptions {
   volume?: number
   ambientSound?: AmbientSoundType
   ambientVolume?: number
+  voiceEnabled?: boolean
+  preferredVoiceName?: string
+  voiceRate?: number
 }
 
 export interface EngineState {

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { Journey, JourneyProgress, SessionPreset } from '../types'
-import { presets } from '../presets'
+import { allPresets as presets } from '../presets'
 
 interface Props {
   journey: Journey

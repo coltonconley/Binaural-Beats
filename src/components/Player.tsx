@@ -107,9 +107,9 @@ export function Player({
   const progress = state.duration > 0 ? state.elapsed / state.duration : 0
   const circumference = 2 * Math.PI * 140
 
-  // Phase label
-  const phaseLabel =
-    state.phase === 'main' ? getMainPhaseLabel(preset, state.beatFreq) : phaseLabels[state.phase]
+  // Phase label — use guidance phase name for guided sessions, fall back to generic
+  const phaseLabel = state.guidancePhaseName
+    ?? (state.phase === 'main' ? getMainPhaseLabel(preset, state.beatFreq) : phaseLabels[state.phase])
 
   const orbSize = typeof window !== 'undefined' ? Math.min(window.innerWidth * 0.6, 300) : 300
 

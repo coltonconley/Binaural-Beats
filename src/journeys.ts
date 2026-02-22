@@ -365,4 +365,51 @@ export const journeys: Journey[] = [
       },
     ],
   },
+  // ── Guided Gateway Experience ──────────────────────────────
+  {
+    id: 'guided-gateway-experience',
+    name: 'Guided Gateway Experience',
+    description: 'Progressive 6-day guided meditation program based on the Gateway process. Voice-narrated sessions take you from Focus 10 through Focus 21 with full preparation protocols.',
+    category: 'guided',
+    icon: '🌀',
+    color: '#7c3aed',
+    days: [
+      {
+        day: 1,
+        presetId: 'guided-foundation',
+        title: 'Foundation',
+        tip: 'Full guided introduction. Learn the Energy Conversion Box, Resonant Tuning, REBAL, and Affirmation. Progressive relaxation to Focus 10.',
+      },
+      {
+        day: 2,
+        presetId: 'guided-deepening',
+        title: 'Deepening',
+        tip: 'Abbreviated prep with rapid Focus 10 entry. 18 minutes of uninterrupted freeflow time to deepen your practice.',
+      },
+      {
+        day: 3,
+        presetId: 'guided-expansion',
+        title: 'Expansion',
+        tip: 'Journey from Focus 10 into Focus 12 — expanded awareness. Experience the shift from body-asleep to wider perception.',
+      },
+      {
+        day: 4,
+        presetId: 'guided-liberation',
+        title: 'Liberation',
+        tip: 'Progress through Focus 12 to Focus 15 — the "No-Time" state. Release from the constraints of time and space.',
+      },
+      {
+        day: 5,
+        presetId: 'guided-bridging',
+        title: 'Bridging',
+        tip: 'Rapid transit through all focus levels to Focus 21 — "The Bridge." The deepest guided state at the edge of perception.',
+      },
+      {
+        day: 6,
+        presetId: 'guided-integration',
+        title: 'Integration',
+        tip: 'Self-directed full-spectrum freeflow. Minimal guidance — you choose your own depth and pace through all focus levels.',
+      },
+    ],
+  },
 ]

@@ -1,13 +1,18 @@
-import type { SessionPreset, SessionPhase, FrequencyPoint, AmbientSoundType } from '../types'
+import type { SessionPreset, SessionPhase, FrequencyPoint, AmbientSoundType, GuidanceScript } from '../types'
 import { BinauralEngine } from './BinauralEngine'
 import { NoiseGenerator } from './NoiseGenerator'
 import { IsochronicEngine } from './IsochronicEngine'
 import { AmbientEngine } from './AmbientEngine'
+import { VoiceCueEngine } from './VoiceCueEngine'
+import { ChimeEngine } from './ChimeEngine'
+import { PhasedNoiseEngine } from './PhasedNoiseEngine'
+import { ResonantToneEngine } from './ResonantToneEngine'
 
 export type SessionCallback = (state: {
   phase: SessionPhase
   elapsed: number
   beatFreq: number
+  guidancePhaseName?: string
 }) => void
 
 export class SessionManager {
@@ -16,6 +21,10 @@ export class SessionManager {
   private noise = new NoiseGenerator()
   private isochronic = new IsochronicEngine()
   private ambient = new AmbientEngine()
+  private voiceCues = new VoiceCueEngine()
+  private chime = new ChimeEngine()
+  private phasedNoise = new PhasedNoiseEngine()
+  private resonantTone = new ResonantToneEngine()
   private preset: SessionPreset | null = null
   private startTime = 0
   private pausedAt = 0
@@ -30,6 +39,9 @@ export class SessionManager {
   private _starting = false
   private ambientVolume = 0
   private ambientSound: AmbientSoundType = 'none'
+  private guidanceScript: GuidanceScript | null = null
+  private isGuidedSession = false
+  private resonantToneActive = false
 
   get phase(): SessionPhase {
     return this._phase
@@ -66,6 +78,11 @@ export class SessionManager {
     onUpdate: SessionCallback,
     ambientSound?: AmbientSoundType,
     ambientVolume?: number,
+    sessionOptions?: {
+      voiceEnabled?: boolean
+      preferredVoiceName?: string
+      voiceRate?: number
+    },
   ): Promise<void> {
     if (this._starting) return
     this._starting = true
@@ -80,6 +97,9 @@ export class SessionManager {
       this._isochronicEnabled = isochronicEnabled && preset.isochronicAvailable
       this.ambientSound = ambientSound ?? preset.ambientSound
       this.ambientVolume = ambientVolume ?? preset.ambientVolume
+      this.guidanceScript = preset.guidanceScript ?? null
+      this.isGuidedSession = !!this.guidanceScript
+      this.resonantToneActive = false
 
       const initialBeatFreq = preset.frequencyEnvelope[0].beatFreq
 
@@ -99,8 +119,15 @@ export class SessionManager {
       // Fade in over 2 seconds
       this.engine.fadeVolume(volume, 2)
 
-      // Start noise
-      if (preset.noiseType !== 'none') {
+      // Start noise — use phased noise for guided sessions, regular noise otherwise
+      if (this.isGuidedSession && this.guidanceScript?.phasedNoise) {
+        this.phasedNoise.start(
+          this.ctx,
+          this.ctx.destination,
+          initialBeatFreq,
+          preset.noiseVolume * volume,
+        )
+      } else if (preset.noiseType !== 'none') {
         this.noise.start(this.ctx, this.ctx.destination, preset.noiseType, 0)
         this.noise.fadeVolume(preset.noiseVolume * volume, 2)
       }
@@ -120,6 +147,24 @@ export class SessionManager {
       if (this.ambientSound !== 'none') {
         await this.ambient.start(this.ctx, this.ctx.destination, this.ambientSound, 0)
         this.ambient.fadeVolume(this.ambientVolume, 2)
+      }
+
+      // Initialize guided session engines
+      if (this.isGuidedSession && this.guidanceScript) {
+        // Initialize chime engine
+        this.chime.init(this.ctx, this.ctx.destination)
+
+        // Play start chime
+        this.chime.playChime('start')
+
+        // Initialize voice cue engine
+        const voiceEnabled = sessionOptions?.voiceEnabled !== false
+        this.voiceCues.init(this.guidanceScript.voiceCues, {
+          preferredVoiceName: sessionOptions?.preferredVoiceName,
+          rate: sessionOptions?.voiceRate,
+          volume: this.guidanceScript.voiceVolume ?? 0.71,
+          enabled: voiceEnabled,
+        })
       }
 
       this._phase = 'induction'
@@ -142,6 +187,15 @@ export class SessionManager {
     this.noise.fadeVolume(0, 0.3)
     this.ambient.fadeVolume(0, 0.3)
     if (this._isochronicEnabled) this.isochronic.setVolume(0)
+
+    // Pause guided session engines
+    if (this.isGuidedSession) {
+      this.voiceCues.pause()
+      this.phasedNoise.fadeVolume(0, 0.3)
+      if (this.resonantToneActive) {
+        this.resonantTone.fadeVolume(0, 0.3)
+      }
+    }
   }
 
   resume(): void {
@@ -162,6 +216,20 @@ export class SessionManager {
     }
     this.ambient.fadeVolume(this.ambientVolume, 0.3)
     if (this._isochronicEnabled) this.isochronic.setVolume(this.volume)
+
+    // Resume guided session engines
+    if (this.isGuidedSession && this.preset) {
+      this.voiceCues.resume()
+      if (this.phasedNoise.isRunning) {
+        this.phasedNoise.fadeVolume(this.preset.noiseVolume * this.volume, 0.3)
+      }
+      if (this.resonantToneActive) {
+        const gainDb = this.guidanceScript?.resonantTuning?.gainDb ?? -6
+        const linearGain = Math.pow(10, gainDb / 20)
+        this.resonantTone.fadeVolume(linearGain, 0.3)
+      }
+    }
+
     this.startTickLoop()
   }
 
@@ -171,6 +239,12 @@ export class SessionManager {
     this.noise.fadeVolume(0, durationSec)
     this.ambient.fadeVolume(0, durationSec)
     if (this._isochronicEnabled) this.isochronic.setVolume(0)
+    if (this.isGuidedSession) {
+      this.phasedNoise.fadeVolume(0, durationSec)
+      if (this.resonantToneActive) {
+        this.resonantTone.fadeVolume(0, durationSec)
+      }
+    }
   }
 
   stop(): void {
@@ -180,6 +254,10 @@ export class SessionManager {
     this.noise.stop()
     this.isochronic.stop()
     this.ambient.stop()
+    this.voiceCues.stop()
+    this.chime.stop()
+    this.phasedNoise.stop()
+    this.resonantTone.stop()
     if (this.ctx && this.ctx.state !== 'closed') {
       this.ctx.close()
     }
@@ -193,6 +271,9 @@ export class SessionManager {
     this._isochronicEnabled = false
     this.ambientSound = 'none'
     this.ambientVolume = 0
+    this.guidanceScript = null
+    this.isGuidedSession = false
+    this.resonantToneActive = false
   }
 
   setVolume(v: number): void {
@@ -201,6 +282,9 @@ export class SessionManager {
     this.engine.setVolume(v)
     if (this.preset) {
       this.noise.setVolume(this.preset.noiseVolume * v)
+      if (this.isGuidedSession && this.phasedNoise.isRunning) {
+        this.phasedNoise.setVolume(this.preset.noiseVolume * v)
+      }
     }
     if (this._isochronicEnabled) this.isochronic.setVolume(v)
   }
@@ -230,8 +314,6 @@ export class SessionManager {
     const clampedTime = Math.max(0, Math.min(targetTime, this.preset.duration - 0.1))
 
     // Adjust pauseOffset so that elapsed calculation yields clampedTime
-    // elapsed = (now - startTime - pauseOffset) / 1000 = clampedTime
-    // pauseOffset = now - startTime - clampedTime * 1000
     const now = this.pausedAt > 0 ? this.pausedAt : performance.now()
     this.pauseOffset = now - this.startTime - clampedTime * 1000
 
@@ -247,11 +329,21 @@ export class SessionManager {
       this.isochronic.setBeatFrequency(targetFreq)
     }
 
+    // Seek voice cues
+    if (this.isGuidedSession) {
+      this.voiceCues.seek(clampedTime)
+    }
+
     // Fire callback immediately
+    const guidancePhaseName = this.isGuidedSession
+      ? this.getCurrentGuidancePhaseName(clampedTime)
+      : undefined
+
     this.callback?.({
       phase: this._phase,
       elapsed: clampedTime,
       beatFreq: targetFreq,
+      guidancePhaseName,
     })
   }
 
@@ -349,10 +441,32 @@ export class SessionManager {
         this.isochronic.setBeatFrequency(targetFreq)
       }
 
+      // Guided session tick updates
+      let guidancePhaseName: string | undefined
+      if (this.isGuidedSession && this.guidanceScript) {
+        // Voice cue processing
+        const { shouldChime } = this.voiceCues.tick(this._elapsed)
+        if (shouldChime) {
+          this.chime.playChime('transition')
+        }
+
+        // Resonant tuning management
+        this.updateResonantTone(this._elapsed)
+
+        // Update phased noise pan rate to match beat frequency
+        if (this.phasedNoise.isRunning) {
+          this.phasedNoise.setPanRate(targetFreq)
+        }
+
+        // Get current guidance phase name
+        guidancePhaseName = this.getCurrentGuidancePhaseName(this._elapsed)
+      }
+
       this.callback?.({
         phase: this._phase,
         elapsed: this._elapsed,
         beatFreq: targetFreq,
+        guidancePhaseName,
       })
     } catch (err) {
       console.error('Session tick error:', err)
@@ -372,6 +486,19 @@ export class SessionManager {
       this.engine.fadeVolume(0, 5)
       this.noise.fadeVolume(0, 5)
       this.ambient.fadeVolume(0, 5)
+      if (this.isGuidedSession) {
+        this.phasedNoise.fadeVolume(0, 5)
+      }
+    }
+
+    // Play end chime for guided sessions
+    if (this.isGuidedSession) {
+      this.chime.playChime('end')
+      this.voiceCues.stop()
+      if (this.resonantToneActive) {
+        this.resonantTone.stop()
+        this.resonantToneActive = false
+      }
     }
 
     this.callback?.({
@@ -429,5 +556,38 @@ export class SessionManager {
     if (segDur === 0) return prev.beatFreq
     const progress = (time - prev.time) / segDur
     return prev.beatFreq + (next.beatFreq - prev.beatFreq) * progress
+  }
+
+  // ── Guided session helpers ──────────────────────────────
+
+  private getCurrentGuidancePhaseName(elapsed: number): string | undefined {
+    if (!this.guidanceScript) return undefined
+    const phases = this.guidanceScript.phases
+    for (let i = phases.length - 1; i >= 0; i--) {
+      if (elapsed >= phases[i].startTime && elapsed < phases[i].endTime) {
+        return phases[i].name
+      }
+    }
+    return undefined
+  }
+
+  private updateResonantTone(elapsed: number): void {
+    if (!this.guidanceScript?.resonantTuning || !this.ctx) return
+
+    const rt = this.guidanceScript.resonantTuning
+    const inWindow = elapsed >= rt.startTime && elapsed < rt.endTime
+
+    if (inWindow && !this.resonantToneActive) {
+      this.resonantTone.start(
+        this.ctx,
+        this.ctx.destination,
+        rt.frequency ?? 136,
+        rt.gainDb ?? -6,
+      )
+      this.resonantToneActive = true
+    } else if (!inWindow && this.resonantToneActive) {
+      this.resonantTone.stop()
+      this.resonantToneActive = false
+    }
   }
 }

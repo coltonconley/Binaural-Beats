@@ -5,6 +5,12 @@ import { FrequencySparkline } from './FrequencySparkline'
 import { usePreviewTone } from '../hooks/usePreviewTone'
 import { ambientSounds } from '../audio/ambientSounds'
 
+function formatPhaseTime(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 interface Props {
   preset: SessionPreset
   onClose: () => void
@@ -26,14 +32,55 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
   const band = bandInfo[preset.targetBand]
   const preview = usePreviewTone()
 
+  // Voice settings for guided sessions
+  const isGuided = !!preset.guidanceScript
+  const [voiceEnabled, setVoiceEnabled] = useState(true)
+  const [voiceRate, setVoiceRate] = useState(85) // stored as 50-150, displayed as 0.5-1.5
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  const [selectedVoiceName, setSelectedVoiceName] = useState('')
+
+  // Load available voices
+  useEffect(() => {
+    if (!isGuided || typeof speechSynthesis === 'undefined') return
+
+    const loadVoices = () => {
+      const available = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'))
+      setVoices(available)
+      if (available.length > 0 && !selectedVoiceName) {
+        setSelectedVoiceName(available[0].name)
+      }
+    }
+
+    loadVoices()
+    speechSynthesis.addEventListener('voiceschanged', loadVoices)
+    return () => speechSynthesis.removeEventListener('voiceschanged', loadVoices)
+  }, [isGuided, selectedVoiceName])
+
+  const handleTestVoice = useCallback(() => {
+    if (typeof speechSynthesis === 'undefined') return
+    speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance('Mind awake, body asleep.')
+    const voice = voices.find(v => v.name === selectedVoiceName)
+    if (voice) utterance.voice = voice
+    utterance.rate = voiceRate / 100
+    utterance.volume = 0.7
+    speechSynthesis.speak(utterance)
+  }, [voices, selectedVoiceName, voiceRate])
+
   const handleBegin = () => {
     preview.stop()
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.cancel()
+    }
     onBegin(preset, {
       isochronicEnabled,
       breathingGuideEnabled,
       volume: volume / 100,
       ambientSound,
       ambientVolume: ambientVolume / 100,
+      voiceEnabled: isGuided ? voiceEnabled : undefined,
+      preferredVoiceName: isGuided ? selectedVoiceName : undefined,
+      voiceRate: isGuided ? voiceRate / 100 : undefined,
     })
   }
 
@@ -218,6 +265,91 @@ export function SessionSetup({ preset, onClose, onBegin }: Props) {
               onChange={setBreathingGuideEnabled}
             />
           </div>
+
+          {/* Guided session: Phase timeline */}
+          {isGuided && preset.guidanceScript && (
+            <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Guidance Phases</p>
+              <div className="space-y-1.5">
+                {preset.guidanceScript.phases.map((phase, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-slate-300">{phase.name}</span>
+                    <span className="text-slate-500 font-mono text-[10px]">
+                      {formatPhaseTime(phase.startTime)} – {formatPhaseTime(phase.endTime)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Guided session: Voice settings */}
+          {isGuided && (
+            <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Voice Guidance</p>
+
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="text-xs text-slate-300">Voice narration</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={voiceEnabled}
+                  aria-label="Voice narration"
+                  onClick={() => setVoiceEnabled(!voiceEnabled)}
+                  className={`w-10 h-6 rounded-full p-0.5 transition-colors cursor-pointer ${voiceEnabled ? 'bg-purple-500' : 'bg-white/10'}`}
+                >
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${voiceEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {voiceEnabled && voices.length > 0 && (
+                <>
+                  <div className="mb-3">
+                    <label className="text-[10px] text-slate-500 block mb-1">Voice</label>
+                    <select
+                      value={selectedVoiceName}
+                      onChange={(e) => setSelectedVoiceName(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 outline-none focus:border-white/20"
+                    >
+                      {voices.map((v) => (
+                        <option key={v.name} value={v.name}>{v.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                      <span>Speech rate</span>
+                      <span>{(voiceRate / 100).toFixed(2)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={50}
+                      max={150}
+                      value={voiceRate}
+                      onChange={(e) => setVoiceRate(Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleTestVoice}
+                    className="w-full py-2 rounded-xl text-xs font-medium text-slate-400 border border-white/10 hover:border-white/20 transition-colors"
+                  >
+                    Test Voice
+                  </button>
+                </>
+              )}
+
+              {voiceEnabled && voices.length === 0 && typeof speechSynthesis !== 'undefined' && (
+                <p className="text-[10px] text-slate-500">Loading voices...</p>
+              )}
+
+              {typeof speechSynthesis === 'undefined' && (
+                <p className="text-[10px] text-amber-500/70">Voice synthesis not available in this browser. Chimes will still play.</p>
+              )}
+            </div>
+          )}
 
           {/* Headphone notice */}
           <div className="flex items-center gap-2 mb-6 text-slate-500">

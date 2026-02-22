@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { SessionPreset, PresetCategory, UserStats, Journey, JourneyProgress } from '../types'
-import { presets, categoryLabels, categoryOrder, getRecommendedPresets, getTimeGreeting } from '../presets'
+import { presets, allPresets as allBuiltInPresets, categoryLabels, categoryOrder, getRecommendedPresets, getTimeGreeting } from '../presets'
 import { journeys } from '../journeys'
 import { PresetCard } from './PresetCard'
 import { JourneyCard } from './JourneyCard'
@@ -35,15 +35,15 @@ export function PresetList({ onSelect, stats, favorites = [], onToggleFavorite, 
   const hasFavorites = favorites.length > 0
   const hasHistory = stats && stats.totalSessions > 0
 
-  const allPresets = useMemo(() => [...presets, ...customPresets], [customPresets])
+  const allPresets = useMemo(() => [...allBuiltInPresets, ...customPresets], [customPresets])
 
   const filtered = filter === 'all'
-    ? presets
+    ? allBuiltInPresets
     : filter === 'favorites'
       ? allPresets.filter((p) => favorites.includes(p.id))
       : filter === 'custom'
         ? customPresets
-        : presets.filter((p) => p.category === filter)
+        : allBuiltInPresets.filter((p) => p.category === filter)
 
   // Time-of-day recommendations
   const recommended = useMemo(() => {
